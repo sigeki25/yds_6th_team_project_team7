@@ -1,2 +1,5 @@
 uvicorn
 fastapi
+
+# dot-env
+python-dotenv
