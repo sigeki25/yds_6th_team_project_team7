@@ -1,0 +1,12 @@
+# ollama 설치(로컬(PC)에서 LLM 받기)
+# PowerShell 에서 실행
+
+# ollama 설치
+irm https://ollama.com/install.ps1 | iex
+
+# ollama로 LLM모델 gemma4:e4b 받기
+ollama run gemma4:e4b
+
+# >>> Send a message (/? for help)
+# 이 형식이 나오면 설치가 완료되고 실행된 것이므로 "/bye" 를 써서 나가기
+/bye
