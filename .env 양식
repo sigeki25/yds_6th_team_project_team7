@@ -1,0 +1,7 @@
+# API 키 등록 파일
+
+# 카카오 디벨로퍼 키
+KAKAO_API_KEY=
+
+# TourAPI (한국관광콘텐츠랩) 키
+TOUR_API_KEY=
