@@ -3,3 +3,7 @@ fastapi
 
 # dot-env
 python-dotenv
+
+# langchain
+langchain-core
+langchain-ollama
