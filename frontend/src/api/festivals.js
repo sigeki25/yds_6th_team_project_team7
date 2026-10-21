@@ -1,28 +1,26 @@
 // 백엔드 API 호출. 백엔드가 준비되기 전에는 USE_MOCK = true 로 mock 데이터를 씀.
 //
-// ── 프론트가 기대하는 응답 형식 (백엔드와 협의용) ─────────────────────
-// GET /api/festivals?month=YYYY-MM&region=chungcheong&sido=44&sigungu=210&cat=EV010400&active=1&sort=date|distance&lat=&lng=&page=1&size=12
-//   - month: 그 달에 하루라도 열리는 축제. 비우면 전체
-//   - region: 7개 권역 코드 (lib/regions.js, 형식 협의 필요)
-//   - sido / sigungu: TourAPI 법정동 코드 (lDongRegnCd / lDongSignguCd)
-//   - active=1: 종료 축제 빼기 (개최중 · 예정만)
-//   - cat: TourAPI 분류 코드 (lclsSystm3)
-//   - sort=date: 개최중 → 예정(시작일 빠른 순) → 종료(최근 순)
-//   - sort=distance: lat, lng 에서 가까운 순
-//   → 200 { "total": 8, "items": [Festival, ...] }
+// ── 백엔드와 맞춘 형식 (tour_api.py 함수 인자 · 반환값 그대로) ────────────
+// GET /api/festivals?start_date=YYYYMMDD&end_date=YYYYMMDD&sido=44&sigungu=210&lclsSystm3=EV010400&page=1&size=1000
+//   → search_festival(start_date, end_date, sido, sigungu, page, size, lclsSystm3=...)
+//   - TourAPI 날짜 조건은 기간이 겹치는 축제 (종료일 >= start_date, 시작일 <= end_date)
+//   → 200 { "total": 8, "page": 1, "size": 1000, "items": [Festival, ...] }
 //
 // GET /api/festivals/:id
-//   → 200 FestivalDetail / 404 없는 축제
+//   → get_festival_detail(id). None 이면 404
+//
+// GET /api/places?sido=44&content_type_id=12&size=100     (12 관광지, 39 음식점)
+//   → area_based_list(sido, sigungu, content_type_id, page, size)
+//   → 200 { "total", "page", "size", "items": [Place, ...] }
 //
 // Festival = { id, title, startDate:"2026-10-16", endDate, sidoCode, sido:"충청남도",
 //              sigunguCode, sigungu:"서산시", category, image, lat, lng }
 // FestivalDetail = Festival + { address, tel, sponsor, fee, homepage, overview, place, playtime }
+// Place = { id, contentTypeId, title, address, tel, image, lat, lng, sidoCode, sido, sigunguCode, sigungu, category, distance }
 //   - 값이 없으면 null (AI 추정값 금지, TourAPI 원본 값만)
 //
-// GET /api/places?region=chungcheong   (H120 관광지 · 음식점 점)
-//   → 200 { "items": [Place, ...] }
-// Place = { id, type:"attraction"|"food", title, address, sidoCode, sigunguCode, region, image, lat, lng }
-//   - 좌표 없는 장소는 빼고 줌
+// TourAPI 가 못 하는 것은 화면에서 처리함: 7개 권역(→ 시·도 여러 번 호출), 종료 제외(→ start_date=오늘),
+// 축제만 남기기(분류 EV01), 축제일순 · 가까운 순 정렬, 12개씩 나눠 보기
 // ────────────────────────────────────────────────────────────────
 
 import { asset, distanceKm, festivalStatus, REGION_BY_SIDO, STATUS, today } from "../lib/festival.js";
@@ -31,20 +29,89 @@ export const USE_MOCK = true;
 
 export class NotFoundError extends Error {}
 
-export async function fetchFestivals(params) {
-  if (USE_MOCK) return mockFestivals(params);
-  const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== "" && v != null));
-  return getJson(`/api/festivals?${qs}`);
+const FESTIVAL_CATEGORY = "EV01"; // 분류 '축제' (공연 · 행사는 뺌)
+const FETCH_SIZE = 1000;          // 한 번에 다 받아 화면에서 정렬 · 페이지 나눔
+const PLACE_TYPES = { 12: "attraction", 39: "food" };
+const PLACE_SIZE = 100;           // 시·도 · 종류별로 받는 장소 수
+
+/** 권역 → 시·도 코드 목록 */
+const sidosOf = (region) => Object.keys(REGION_BY_SIDO).filter((code) => REGION_BY_SIDO[code] === region);
+
+/**
+ * 축제 목록. 화면 조건을 백엔드 조건으로 바꿔 받고, 나머지는 여기서 거르고 정렬함
+ * @param {{month?, region?, sido?, sigungu?, cat?, active?, sort?, lat?, lng?, page?, size?}} params
+ */
+export async function fetchFestivals({ month, region, sido, sigungu, cat, active, sort = "date", lat, lng, page = 1, size = 12 }) {
+  const base = today();
+  let start = month ? `${month}-01` : `${Number(base.slice(0, 4)) - 1}-01-01`; // 전체: 작년부터
+  const end = month ? lastDay(month) : "";
+  if (active && start < base) start = base;
+  if (end && start > end) return { total: 0, items: [] };
+
+  const sidoList = region ? sidosOf(region) : [sido || ""];
+  const query = (s) => ({
+    start_date: compact(start), end_date: compact(end), sido: s, sigungu: s && sigungu,
+    lclsSystm3: cat, page: 1, size: FETCH_SIZE,
+  });
+  const results = await Promise.all(sidoList.map((s) => cachedGet("/api/festivals", query(s))));
+
+  const seen = new Set();
+  let items = results.flatMap((r) => r.items).filter((f) => {
+    if (seen.has(f.id)) return false;
+    seen.add(f.id);
+    return f.category?.startsWith(FESTIVAL_CATEGORY) && (!active || festivalStatus(f, base) !== "ended");
+  });
+
+  if (sort === "distance" && lat != null && lng != null) {
+    const here = { lat: Number(lat), lng: Number(lng) };
+    const dist = (f) => (f.lat != null && f.lng != null ? distanceKm(here, f) : Infinity);
+    items.sort((a, b) => dist(a) - dist(b));
+  } else {
+    // 축제일순: 개최중 → 예정(시작일 빠른 순) → 종료(최근 순)
+    items.sort((a, b) => {
+      const sa = festivalStatus(a, base);
+      const sb = festivalStatus(b, base);
+      if (sa !== sb) return STATUS[sa].order - STATUS[sb].order;
+      if (sa === "ended") return (b.endDate ?? "").localeCompare(a.endDate ?? "");
+      return (a.startDate ?? "").localeCompare(b.startDate ?? "");
+    });
+  }
+  const from = (Number(page) - 1) * Number(size);
+  return { total: items.length, items: items.slice(from, from + Number(size)) };
 }
 
+/** 권역의 관광지 · 음식점 (좌표 없는 곳은 뺌) */
 export async function fetchPlaces(region) {
-  if (USE_MOCK) return mockPlaces(region);
-  return getJson(`/api/places?region=${encodeURIComponent(region)}`);
+  const calls = sidosOf(region).flatMap((sido) => Object.keys(PLACE_TYPES).map((type) =>
+    cachedGet("/api/places", { sido, content_type_id: type, page: 1, size: PLACE_SIZE })));
+  const seen = new Set();
+  const items = (await Promise.all(calls)).flatMap((r) => r.items).flatMap((p) => {
+    const type = PLACE_TYPES[p.contentTypeId];
+    if (!type || p.lat == null || p.lng == null || seen.has(p.id)) return [];
+    seen.add(p.id);
+    return [{ ...p, type, region }];
+  });
+  return { items };
 }
 
 export async function fetchFestival(id) {
   if (USE_MOCK) return mockFestival(id);
   return getJson(`/api/festivals/${encodeURIComponent(id)}`);
+}
+
+// 같은 조건은 화면을 옮겨도 다시 부르지 않음 (TourAPI 하루 호출 수 아끼기, 새로고침하면 비움)
+const cache = new Map();
+function cachedGet(path, params) {
+  const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== "" && v != null)).toString();
+  const key = `${path}?${qs}`;
+  if (!cache.has(key)) {
+    const req = (USE_MOCK ? mockGet(path, params) : getJson(key)).catch((err) => {
+      cache.delete(key);
+      throw err;
+    });
+    cache.set(key, req);
+  }
+  return cache.get(key);
 }
 
 /** 시·도 / 시·군·구 목록 (TourAPI 법정동 코드) */
@@ -65,57 +132,41 @@ async function getJson(url) {
 }
 
 // ── mock (TourAPI 실제 데이터 스냅샷, 상세는 충남만) ─────────────────────
+// 백엔드 엔드포인트가 돌려줄 값을 그대로 흉내 냄
 let mockList;
 function loadMockList() {
   mockList ??= getJson(asset("mock/festivals.json"));
   return mockList;
 }
 
-async function mockFestivals({ month, region, sido, sigungu, cat, active, sort = "date", lat, lng, page = 1, size = 12 }) {
-  await delay(250);
-  let items = await loadMockList();
-  if (month) {
-    const [y, m] = month.split("-").map(Number);
-    const first = `${month}-01`;
-    const last = `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
-    items = items.filter((f) => f.startDate <= last && f.endDate >= first);
-  }
-  if (region) items = items.filter((f) => REGION_BY_SIDO[f.sidoCode] === region);
-  if (sido) items = items.filter((f) => f.sidoCode === sido);
-  if (sigungu) items = items.filter((f) => f.sigunguCode === sigungu);
-  if (cat) items = items.filter((f) => f.category === cat);
-
-  const base = today();
-  if (active) items = items.filter((f) => festivalStatus(f, base) !== "ended");
-  if (sort === "distance" && lat != null && lng != null) {
-    const here = { lat: Number(lat), lng: Number(lng) };
-    const dist = (f) => (f.lat != null && f.lng != null ? distanceKm(here, f) : Infinity);
-    items = [...items].sort((a, b) => dist(a) - dist(b));
-  } else {
-    items = [...items].sort((a, b) => {
-      const sa = festivalStatus(a, base);
-      const sb = festivalStatus(b, base);
-      if (sa !== sb) return STATUS[sa].order - STATUS[sb].order;
-      if (sa === "ended") return b.endDate.localeCompare(a.endDate);
-      return a.startDate.localeCompare(b.startDate);
-    });
-  }
-  const start = (Number(page) - 1) * Number(size);
-  return { total: items.length, items: items.slice(start, start + Number(size)) };
-}
-
 let mockPlaceList;
+/** 화면용 형태 (type · region 붙음). chat.js mock 도 씀 */
 export function loadMockPlaces() {
   mockPlaceList ??= getJson(asset("mock/places.json"));
   return mockPlaceList;
 }
 
-async function mockPlaces(region) {
-  await delay(200);
-  return { items: (await loadMockPlaces()).filter((p) => p.region === region) };
-}
-
 export { loadMockList as loadMockFestivals };
+
+async function mockGet(path, q) {
+  await delay(200);
+  let items;
+  if (path === "/api/festivals") {
+    const start = q.start_date && dashed(q.start_date);
+    const end = q.end_date && dashed(q.end_date);
+    items = (await loadMockList()).filter((f) =>
+      (!start || f.endDate >= start) && (!end || f.startDate <= end)
+      && (!q.sido || f.sidoCode === q.sido) && (!q.sigungu || f.sigunguCode === q.sigungu)
+      && (!q.lclsSystm3 || f.category === q.lclsSystm3));
+  } else {
+    const typeId = { attraction: 12, food: 39 };
+    items = (await loadMockPlaces())
+      .filter((p) => p.sidoCode === q.sido && String(typeId[p.type]) === String(q.content_type_id))
+      .map(({ type, region: _r, ...p }) => ({ ...p, contentTypeId: typeId[type] }));
+  }
+  const from = (q.page - 1) * q.size;
+  return { total: items.length, page: q.page, size: q.size, items: items.slice(from, from + q.size) };
+}
 
 let mockDetails;
 async function mockFestival(id) {
@@ -129,4 +180,10 @@ async function mockFestival(id) {
   return { ...base, address: null, tel: null, sponsor: null, fee: null, homepage: null, overview: null };
 }
 
+function lastDay(month) {
+  const [y, m] = month.split("-").map(Number);
+  return `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
+}
+const compact = (ymd) => (ymd ? ymd.replaceAll("-", "") : "");
+const dashed = (d) => `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
 function delay(ms) { return new Promise((r) => setTimeout(r, ms)); }
