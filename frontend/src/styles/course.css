@@ -1,0 +1,79 @@
+/* R110 코스 결과 (헤더 없음) */
+.course { flex: 1; display: grid; grid-template-columns: 440px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: 100vh; min-height: 560px; }
+.course__side { overflow: hidden; display: flex; flex-direction: column; min-height: 0; background: var(--c-surface); border-right: 1px solid var(--c-border); }
+.course__back {
+  display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 0 20px; flex: none;
+  font-weight: 700; border-bottom: 1px solid var(--c-border);
+}
+.course__back:hover { color: var(--c-primary); }
+
+/* 2. 코스 제목 · 요약 */
+.course-summary { padding: 18px 20px; border-bottom: 1px solid var(--c-border); flex: none; }
+.course-summary p { margin: 2px 0 0; font-size: 14px; color: var(--c-text-sub); }
+.course-summary__head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.course-summary__duration {
+  flex: none; height: 26px; padding: 0 10px; border-radius: 999px; display: inline-flex; align-items: center;
+  background: var(--c-primary-soft); color: var(--c-primary); font-size: 13px; font-weight: 700;
+}
+.course-summary__title { margin: 0; font-size: 20px; line-height: 1.35; }
+.course-summary__counts { color: var(--c-text) !important; }
+.course-change {
+  margin: 0; padding: 10px 20px; background: var(--c-primary-soft); color: var(--c-primary);
+  font-size: 14px; font-weight: 600; flex: none;
+}
+
+/* 3 · 4 · 5. 코스 일정 */
+.course-plan { position: relative; flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px 0; }
+.course-plan__title { margin: 0 0 12px; font-size: 16px; }
+.course-plan__list { margin: 0; padding: 0; list-style: none; }
+.place-card {
+  display: grid; grid-template-columns: auto 72px minmax(0, 1fr); gap: 12px; align-items: start;
+  padding: 12px; border: 1.5px solid var(--c-border); border-radius: var(--radius); cursor: pointer;
+  transition: border-color .15s, background-color .3s;
+}
+.place-card:hover { border-color: var(--c-text-sub); }
+.place-card.is-active { border-color: var(--c-primary); box-shadow: 0 0 0 2px var(--c-primary-soft); }
+.place-card.is-changed { animation: changed 2.4s ease-out; }
+@keyframes changed { 0%, 50% { background: #FFF4D6; border-color: var(--c-warn); } }
+.place-card__photo { width: 72px; height: 72px; border-radius: var(--radius-sm); overflow: hidden; background: var(--c-primary-soft); }
+.place-card__photo img { width: 100%; height: 100%; object-fit: cover; }
+.place-card__type { margin: 0; font-size: 12.5px; color: var(--c-text-sub); }
+.place-card__name { margin: 0 0 2px; font-size: 16px; }
+.place-card__name a, .place-card__name button {
+  padding: 0; border: 0; background: none; cursor: pointer; font: inherit; text-align: left;
+}
+.place-card__name a { color: var(--c-festival); text-decoration: underline; text-underline-offset: 3px; }
+.place-card__meta { margin: 0; font-size: 13px; color: var(--c-text-sub); }
+.course-leg {
+  position: relative; margin: 0 0 0 24px; padding: 10px 0 10px 22px; font-size: 13px; color: var(--c-text-sub);
+  border-left: 2px dashed var(--c-primary);
+}
+.course-leg--estimated { color: var(--c-warn); font-weight: 600; border-left-color: var(--c-warn); }
+.course-plan__loading {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.75); color: var(--c-text-sub); font-weight: 600;
+}
+.course-plan__source { margin: 16px 0 0; padding: 12px 0 16px; font-size: 12.5px; color: var(--c-text-sub); border-top: 1px solid var(--c-border); }
+
+/* 7. 코스 수정 */
+.course-revise { flex: none; padding: 12px 20px 14px; border-top: 1px solid var(--c-border); }
+.course-revise__left { margin: 6px 0 0; font-size: 12.5px; color: var(--c-text-sub); }
+
+/* 8 · 9 · 10. 코스 지도 */
+.course-map { position: relative; min-height: 0; background: var(--c-primary-soft); }
+.course-map__canvas { position: absolute; inset: 0; }
+.course-map__failed { position: absolute; inset: 0; margin: 0; display: grid; place-items: center; color: var(--c-text-sub); padding: 24px; text-align: center; }
+.course-map__credit {
+  position: absolute; right: 12px; bottom: 12px; z-index: 2; margin: 0; padding: 4px 8px; font-size: 12px;
+  background: rgba(255,255,255,.9); border-radius: 6px; color: var(--c-text-sub);
+}
+
+/* M110-B 모바일: 위쪽 지도 + 아래 목록, 수정 입력은 아래 고정 */
+@media (max-width: 767px) {
+  .course { display: flex; flex-direction: column-reverse; height: auto; min-height: 100vh; }
+  .course-map { height: 40vh; min-height: 240px; position: sticky; top: 0; z-index: 1; }
+  .course__side { overflow: visible; border-right: 0; border-radius: 16px 16px 0 0; margin-top: -16px; position: relative; z-index: 2; }
+  .course__back { position: fixed; top: 10px; left: 10px; z-index: 3; min-height: 40px; padding: 0 14px; border: 1px solid var(--c-border); border-radius: 999px; background: var(--c-surface); }
+  .course-plan { overflow: visible; }
+  .course-revise { position: sticky; bottom: 0; background: var(--c-surface); }
+}
