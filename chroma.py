@@ -14,8 +14,8 @@ class FilterSearchData(BaseModel):
     pageNo: int = 1                         # 페이지 수
     contentid: str | None = None            # 조건 - id : 하나만 반환됨
     contenttypeid: str | None = None        # 조건 - 관광타입 ID
-    searchstartdate: str | None = None      # 조건 - 시작 날짜
-    searchenddate: str | None = None        # 조건 - 종료 날짜
+    searchstartdate: str | None = None      # 조건 - 시작 날짜 (YYYYMMDD)
+    searchenddate: str | None = None        # 조건 - 종료 날짜 (YYYYMMDD)
     mapx: str | None = None                 # 조건 - GPS X좌표(WGS84 경도좌표) : mapy와 같이 입력
     mapy: str | None = None                 # 조건 - GPS Y좌표(WGS84 경도좌표) : mapx와 같이 입력
     radius: str | None = None               # 조건 - 거리 반경(단위: m) : mapx, mapy가 필수
