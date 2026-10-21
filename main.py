@@ -1,7 +1,9 @@
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from starlette.staticfiles import StaticFiles
+
+from chroma import FilterSearchData, search_data
 
 from view_routes import router as view_router
 
@@ -21,3 +23,14 @@ logger = logging.getLogger(__name__)
 def main():
     pass
     # return RedirectResponse("/view/index.html")
+
+
+@app.get("/festivals")
+def festivals(params: FilterSearchData = Depends()):
+    result = search_data(**params.model_dump())
+    return result
+
+@app.get("/festivals/{id}")
+def festivals(id: str):
+    result = search_data(contentid=id)
+    return result

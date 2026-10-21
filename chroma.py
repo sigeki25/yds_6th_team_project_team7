@@ -2,6 +2,7 @@ import json
 
 import chromadb
 from chromadb.api.models import Collection
+from pydantic import BaseModel
 
 client = chromadb.PersistentClient(path="./chroma_db")
 collection = client.get_or_create_collection(name="searchFestival2")
@@ -44,6 +45,23 @@ def insert_data():
 
 # insert_data()  # 최초 1회 실행(테이블 생성)
 
+
+class FilterSearchData(BaseModel):
+    numOfRows: int = 10
+    pageNo: int = 1
+    contentid: str | None = None
+    contenttypeid: str | None = None
+    searchstartdate: str | None = None
+    searchenddate: str | None = None
+    mapx: str | None = None
+    mapy: str | None = None
+    lDongRegnCd: str | None = None
+    lDongSignguCd: str | None = None
+    lclsSystm1: str | None = None
+    lclsSystm2: str | None = None
+    lclsSystm3: str | None = None
+    arrange: str | None = None
+    reverse: bool | None = None
 
 def search_data(
         numOfRows: int = 10, pageNo: int = 1,
