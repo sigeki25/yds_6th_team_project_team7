@@ -30,30 +30,49 @@ class FilterSearchData(BaseModel):
 # Response(출력) 변수들
 """
 {
-    "addr1": "서울특별시 중구 정동",     # 주소1
-    "addr2": "(세종대로 19길 124)",      # 주소2
-    "zipcode": "04519",                 # 우편번호
-    "contentid": "142233",              # 콘텐츠 ID : ID 값
-    "contenttypeid": "15",              # 관광타입 ID
-    "title": "정동문화축제",              # 제목
-    "cpyrhtDivCd": "Type3",             # 저작권 유형
-    "lDongRegnCd": "11",                # 법정동 시도 코드
-    "lDongSignguCd": "140",             # 법정동 시군구 코드
-    "tel": "02-3701-1603",              # 전화번호
-    "firstimage": "https://tong.visitkorea.or.kr/cms/resource/49/4117049_image2_1.jpg",     # 대표이미지(원본)
-    "firstimage2": "https://tong.visitkorea.or.kr/cms/resource/49/4117049_image3_1.jpg",    # 대표이미지(썸네일)
-    "createdtime": "20070831090000",    # 등록일
-    "modifiedtime": "20261002102021",   # 콘텐츠 수정일
-    "eventstartdate": "20261016",       # 행사 시작일
-    "eventenddate": "20261017",         # 행사 종료일
-    "mapx": "126.9753470000",           # GPS X좌표(WGS84 경도좌표)
-    "mapy": "37.5670422000",            # GPS Y좌표(WGS84 경도좌표)
-    "mlevel": "6",                      # Map Level
-    "lclsSystm1": "EV",                 # 분류체계 대분류
-    "lclsSystm2": "EV01",               # 분류체계 중분류
-    "lclsSystm3": "EV010600",           # 분류체계 소분류
-    "dist": "794.3025769230144"         # GPS 좌표 거리(mapx, mapy를 요청해야 생성)
+    "header": {
+        "resultCode": "0000",                           # 코드
+        "resultMsg": "OK"                               # 성공
+    },
+    "body": {
+        "items": {
+            "item": [
+                {
+                    "addr1": "서울특별시 중구 정동",     # 주소1
+                    "addr2": "(세종대로 19길 124)",      # 주소2
+                    "zipcode": "04519",                 # 우편번호
+                    "contentid": "142233",              # 콘텐츠 ID : ID 값
+                    "contenttypeid": "15",              # 관광타입 ID
+                    "title": "정동문화축제",              # 제목
+                    "cpyrhtDivCd": "Type3",             # 저작권 유형
+                    "lDongRegnCd": "11",                # 법정동 시도 코드
+                    "lDongSignguCd": "140",             # 법정동 시군구 코드
+                    "tel": "02-3701-1603",              # 전화번호
+                    "firstimage": "https://tong.visitkorea.or.kr/cms/resource/49/4117049_image2_1.jpg",     # 대표이미지(원본)
+                    "firstimage2": "https://tong.visitkorea.or.kr/cms/resource/49/4117049_image3_1.jpg",    # 대표이미지(썸네일)
+                    "createdtime": "20070831090000",    # 등록일
+                    "modifiedtime": "20261002102021",   # 콘텐츠 수정일
+                    "eventstartdate": "20261016",       # 행사 시작일
+                    "eventenddate": "20261017",         # 행사 종료일
+                    "mapx": "126.9753470000",           # GPS X좌표(WGS84 경도좌표)
+                    "mapy": "37.5670422000",            # GPS Y좌표(WGS84 경도좌표)
+                    "mlevel": "6",                      # Map Level
+                    "lclsSystm1": "EV",                 # 분류체계 대분류
+                    "lclsSystm2": "EV01",               # 분류체계 중분류
+                    "lclsSystm3": "EV010600",           # 분류체계 소분류
+                    "dist": "794.3025769230144"         # GPS 좌표 거리(mapx, mapy를 요청해야 생성)
+                },
+                {
+                ...
+                }
+            ]
+        },
+        "numOfRows": 10,                                # Response에서 받는 item의 개수
+        "pageNo": pageNo,                               # Response의 페이지 번호
+        "totalCount": len(datalist)                     # 조건으로 검색된 데이터의 총 개수
+    }
 }
+            
 """
 
 def insert_data():
@@ -103,13 +122,13 @@ def search_data(
         arrange: str | None = None, reverse: bool | None = None,
 ):
     if contentid is not None:
-        return to_json(collection.get(
+        return to_response(to_json(collection.get(
             ids=[contentid],
             include=[
                 "documents",
                 "metadatas",
             ]
-        ))
+        )), pageNo, numOfRows)
     where = {}
     if contenttypeid is not None:
         where["contenttypeid"] = contenttypeid
@@ -150,7 +169,7 @@ def search_data(
             key=lambda x: x.get(arrange, 0),
             reverse=reverse  # True면 내림차순(최신순), False면 오름차순
         )
-    return jsonData[(pageNo - 1) * numOfRows : pageNo * numOfRows]
+    return to_response(jsonData, pageNo, numOfRows)
 
 
 def to_json(collection: Collection):
@@ -163,5 +182,21 @@ def to_json(collection: Collection):
         list.append(data)
     return list
 
+def to_response(datalist: list, pageNo: int = 1, numOfRows: int = 10):
+    data = datalist[(pageNo - 1) * numOfRows : pageNo * numOfRows]
+    return {
+        "header": {
+            "resultCode": "0000",
+            "resultMsg": "OK"
+        },
+        "body": {
+            "items": {
+                "item": data
+            },
+            "numOfRows": len(data),
+            "pageNo": pageNo,
+            "totalCount": len(datalist)
+        }
+    }
 
 # search_data(lDongRegnCd="11", arrange="eventstartdate")  # 테스트
