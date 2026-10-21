@@ -134,8 +134,8 @@ def _call(operation: str, params: dict) -> dict:
 # ──────────────────────────────────────────────────────────────
 # 2. 요청 함수 4개
 # ──────────────────────────────────────────────────────────────
-def area_based_list(sido: str = None, sigungu: str = None, content_type_id: int = None,
-                    page: int = 1, size: int = 10, arrange: str = "C") -> dict:
+def area_based_list(sido: str = None, sigungu: str = None, content_type_id: int | None = None,
+                    page: int = 1, size: int = 10, arrange: str = "C", lclsSystm3: str | None = None) -> dict:
     """지역기반 관광정보조회 (/areaBasedList2)
 
     sido            법정동 시/도 코드 2자리 문자열 (예: "41" 경기도). 없으면 전국
@@ -143,16 +143,22 @@ def area_based_list(sido: str = None, sigungu: str = None, content_type_id: int 
     content_type_id 관광 타입 (CONTENT_TYPES 참고, 예: 12 관광지, 39 음식점). 없으면 전체
     arrange         정렬. A=제목순, C=수정일순, D=생성일순 (O/Q/R 은 이미지 있는 것만)
     """
+    lclsSystm1 = lclsSystm2 = None
+    if lclsSystm3 is not None:
+        lclsSystm1 = lclsSystm3[:2]
+        lclsSystm2 = lclsSystm3[:4]
     result = _call("areaBasedList2", {
         "numOfRows": size, "pageNo": page, "arrange": arrange,
         "contentTypeId": content_type_id,
         "lDongRegnCd": sido, "lDongSignguCd": sigungu,
+        "lclsSystm1": lclsSystm1, "lclsSystm2": lclsSystm2,
+        "lclsSystm3": lclsSystm3,
     })
     return _page(result, page, size, _to_place)
 
 
-def location_based_list(lng: float, lat: float, radius: int = 5000, content_type_id: int = None,
-                        page: int = 1, size: int = 10, arrange: str = "E") -> dict:
+def location_based_list(lng: float, lat: float, radius: int = 5000, content_type_id: int | None = None,
+                        page: int = 1, size: int = 10, arrange: str = "E", lclsSystm3: str | None = None) -> dict:
     """위치기반 관광정보조회 (/locationBasedList2)
 
     lng, lat        경도(mapX), 위도(mapY) — WGS84. 카카오 API 좌표를 그대로 넣으면 됨
@@ -162,6 +168,10 @@ def location_based_list(lng: float, lat: float, radius: int = 5000, content_type
     arrange         E=거리순 (기본). A=제목순, C=수정일순, D=생성일순
     결과 item 의 distance 에 기준점으로부터 거리(m)가 들어간다
     """
+    lclsSystm1 = lclsSystm2 = None
+    if lclsSystm3 is not None:
+        lclsSystm1 = lclsSystm3[:2]
+        lclsSystm2 = lclsSystm3[:4]
     if lng is None or lat is None:
         raise ValueError("lng(경도), lat(위도)는 꼭 넣어야 합니다.")
     radius = max(1, min(int(radius), MAX_RADIUS))
@@ -169,17 +179,23 @@ def location_based_list(lng: float, lat: float, radius: int = 5000, content_type
         "numOfRows": size, "pageNo": page, "arrange": arrange,
         "contentTypeId": content_type_id,
         "mapX": str(lng), "mapY": str(lat), "radius": str(radius),
+        "lclsSystm1": lclsSystm1, "lclsSystm2": lclsSystm2,
+        "lclsSystm3": lclsSystm3,
     })
     return _page(result, page, size, _to_place)
 
 
-def search_keyword(keyword: str, sido: str = None, sigungu: str = None, content_type_id: int = None,
-                   page: int = 1, size: int = 10, arrange: str = "C") -> dict:
+def search_keyword(keyword: str, sido: str | None = None, sigungu: str | None = None, content_type_id: int | None = None,
+                   page: int = 1, size: int = 10, arrange: str = "C", lclsSystm3: str | None = None) -> dict:
     """키워드 검색 조회 (/searchKeyword2)
 
     keyword  검색어 (예: "불꽃축제"). 한글 그대로 넣으면 됨
     sido, sigungu, content_type_id 는 area_based_list 와 같음 (없어도 됨)
     """
+    lclsSystm1 = lclsSystm2 = None
+    if lclsSystm3 is not None:
+        lclsSystm1 = lclsSystm3[:2]
+        lclsSystm2 = lclsSystm3[:4]
     if not keyword or not keyword.strip():
         raise ValueError("keyword(검색어)는 꼭 넣어야 합니다.")
     result = _call("searchKeyword2", {
@@ -187,12 +203,14 @@ def search_keyword(keyword: str, sido: str = None, sigungu: str = None, content_
         "keyword": keyword.strip(),
         "contentTypeId": content_type_id,
         "lDongRegnCd": sido, "lDongSignguCd": sigungu,
+        "lclsSystm1": lclsSystm1, "lclsSystm2": lclsSystm2,
+        "lclsSystm3": lclsSystm3,
     })
     return _page(result, page, size, _to_place)
 
 
-def search_festival(start_date: str, end_date: str = None, sido: str = None, sigungu: str = None,
-                    page: int = 1, size: int = 10, arrange: str = "A") -> dict:
+def search_festival(start_date: str, end_date: str | None = None, sido: str | None = None, sigungu: str | None = None,
+                    page: int = 1, size: int = 10, arrange: str = "A", lclsSystm3: str | None = None) -> dict:
     """행사정보조회 (/searchFestival2)
 
     start_date  행사 시작일 (필수). "20261101" 또는 "2026-11-01" 둘 다 가능
@@ -200,6 +218,10 @@ def search_festival(start_date: str, end_date: str = None, sido: str = None, sig
     sido, sigungu 는 area_based_list 와 같음
     items 는 프론트 Festival 형식으로 돌려준다
     """
+    lclsSystm1 = lclsSystm2 = None
+    if lclsSystm3 is not None:
+        lclsSystm1 = lclsSystm3[:2]
+        lclsSystm2 = lclsSystm3[:4]
     start = _to_api_date(start_date)
     if not start:
         raise ValueError("start_date 는 YYYYMMDD 또는 YYYY-MM-DD 형식으로 꼭 넣어야 합니다.")
@@ -208,6 +230,8 @@ def search_festival(start_date: str, end_date: str = None, sido: str = None, sig
         "numOfRows": size, "pageNo": page, "arrange": arrange,
         "eventStartDate": start, "eventEndDate": end,
         "lDongRegnCd": sido, "lDongSignguCd": sigungu,
+        "lclsSystm1": lclsSystm1, "lclsSystm2": lclsSystm2,
+        "lclsSystm3": lclsSystm3,
     })
     return _page(result, page, size, _to_festival)
 
