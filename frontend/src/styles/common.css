@@ -156,6 +156,8 @@ img { display: block; max-width: 100%; }
 .notice-box__title { margin: 0 0 4px; color: var(--c-text); font-weight: 600; }
 .notice-box__desc { margin: 0 0 20px; }
 
+.site-menu-btn { display: none; }
+
 /* 4. 장소 종류: 번호 마커 (축제 라벨형 · 관광지 원 · 음식점 마름모) */
 .place-mark {
   flex: none; width: 26px; height: 26px; display: inline-grid; place-items: center;
@@ -237,8 +239,18 @@ img { display: block; max-width: 100%; }
 .map-legend__item input { margin: 0; accent-color: var(--c-primary); width: 16px; height: 16px; }
 
 @media (max-width: 767px) {
-  .site-header__inner { gap: 24px; padding: 0 16px; }
-  .site-nav { gap: 20px; }
+  .site-header__inner { gap: 12px; padding: 0 16px; justify-content: space-between; position: relative; }
   .site-logo { font-size: 17px; }
+  .site-menu-btn {
+    display: grid; place-items: center; width: var(--touch); height: var(--touch);
+    border: 0; background: none; font-size: 26px; cursor: pointer;
+  }
+  .site-nav {
+    display: none; position: absolute; top: 100%; left: 0; right: 0; height: auto;
+    flex-direction: column; gap: 0; background: var(--c-surface); border-bottom: 1px solid var(--c-border);
+  }
+  .site-nav.is-open { display: flex; }
+  .site-nav a { height: var(--touch); padding: 0 16px; border-bottom: 0; border-left: 3px solid transparent; }
+  .site-nav a[aria-current="page"] { border-left-color: var(--c-primary); }
   .page { padding: 20px 16px; }
 }
