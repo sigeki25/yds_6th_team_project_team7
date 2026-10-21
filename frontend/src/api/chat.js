@@ -1,16 +1,18 @@
 // AI 코스 도우미 API. 백엔드가 준비되기 전에는 USE_MOCK 으로 화면에서 흉내 냄 (AI 호출 없음).
 //
-// ── 프론트가 기대하는 형식 (백엔드와 협의용) ─────────────────────────
+// ── 백엔드와 맞춘 형식 (llm.py handle_chat 인자 · 반환값 그대로) ───────────
 // POST /api/chat
-//   요청 { messages: [{ role:"user"|"assistant", text }],  // 이번 대화 전체 (저장 안 함)
-//          region: "chungcheong" | null,                   // 지금 고른 권역 (없으면 대화로 판단)
-//          festivalId: "123" | null,                       // 첨부한 축제 (D110 '이 축제로 코스 만들기')
-//          previousCourse: Course | null }                 // 코스 수정(R110)일 때만, 수정은 1회
-//   응답 200 — type 으로 구분
-//     { type:"ask", text, quickReplies?: ["반나절","하루"] }   // 조건이 부족해 되묻기
-//     { type:"course", text, course: Course, fallback?: true }  // fallback: AI 실패로 가까운 순 기본 코스
-//     { type:"refuse", text }                                    // 서비스와 무관한 질문
-//   응답 429 → 하루 사용 한도 초과 (입력창 막음, 지도 · 목록은 그대로)
+//   요청 { message: "이번에 보낸 말",
+//          history: [{ role:"user"|"assistant", content }],   // 이전 대화 (저장 안 함)
+//          region: "chungcheong" | null,          // 추가 제안: 지도에서 고른 권역 (있으면 지역을 안 되물어도 됨)
+//          festival_id: "123" | null,             // 추가 제안: D110 에서 첨부한 축제
+//          previous_course: Course | null }       // 추가 제안: R110 코스 수정(1회)일 때 이전 코스
+//   응답 200 { answer, quick_replies: ["반나절","하루"], conditions,   // handle_chat 반환값 그대로
+//              course?: Course, fallback?: true }                     // 추가 제안: 코스가 완성됐을 때
+//     - conditions 가 null → AI 오류 안내 (CM10-8)
+//     - conditions.off_topic → 서비스와 무관한 질문 (CM10-10)
+//     - course 가 있으면 코스 완성 (CM10-7). fallback: AI 실패로 가까운 순 기본 코스
+//   응답 429 → 하루 사용 한도 초과 (CM10-9, 추가 제안)
 //
 // Course = { title, duration:"half"|"day", baseDate:"2026-10-21", baseDateDefault: true,
 //            region, totalKm, moveMin, totalMin, estimated,      // estimated: 추정 구간이 하나라도 있음
@@ -31,8 +33,20 @@ export const CHAT_MAX_LENGTH = 200;
 
 export class ChatLimitError extends Error {}
 
-export async function postChat(body) {
-  if (USE_MOCK) return mockChat(body);
+/**
+ * 채팅 한 번 주고받기
+ * @param {{messages: {role, text}[], region, festivalId, previousCourse}} req  messages 의 마지막이 이번에 보낸 말
+ * @returns {{type: "ask"|"text"|"course"|"refuse"|"error", text, quickReplies?, course?, fallback?}}
+ */
+export async function postChat({ messages, region, festivalId, previousCourse }) {
+  const body = {
+    message: messages.at(-1).text,
+    history: messages.slice(0, -1).map(({ role, text }) => ({ role, content: text })),
+    region: region ?? null,
+    festival_id: festivalId ?? null,
+    previous_course: previousCourse ?? null,
+  };
+  if (USE_MOCK) return toReply(await mockChat(body));
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -40,7 +54,16 @@ export async function postChat(body) {
   });
   if (res.status === 429) throw new ChatLimitError();
   if (!res.ok) throw new Error(`${res.status} /api/chat`);
-  return res.json();
+  return toReply(await res.json());
+}
+
+/** handle_chat 반환값 → 화면에서 쓰는 형태 */
+function toReply({ answer, quick_replies: quickReplies, conditions, course, fallback }) {
+  if (course) return { type: "course", text: answer, course, fallback };
+  if (conditions === null) return { type: "error", text: answer };
+  if (conditions?.off_topic) return { type: "refuse", text: answer };
+  if (quickReplies?.length) return { type: "ask", text: answer, quickReplies };
+  return { type: "text", text: answer };
 }
 
 // ── mock ─────────────────────────────────────────────────────────
@@ -49,18 +72,28 @@ const LIMIT = { half: 240, day: 480 };
 const DAILY_LIMIT = 20; // 새로고침하면 다시 셈
 let usedToday = 0;
 
-const ASK_DURATION = "얼마나 다녀오실 예정인가요?";
-const ASK_AREA = "어느 지역으로 가실 건가요? 시 · 군 이름으로 말씀해 주세요.";
+// llm.py 와 같은 문구
+const ASK_DURATION = "반나절과 하루 중 얼마나 다녀오실 예정인가요?";
+const ASK_AREA = "어느 지역으로 가고 싶으세요?";
 const ASK_DATE = "언제 가실 건가요? 축제 기간 안의 날짜로 골라 주세요.";
+const OFF_TOPIC = "여행 코스 만들기만 도와드릴 수 있어요. 가고 싶은 지역을 말씀해 주세요.";
 
-async function mockChat({ messages, region, festivalId, previousCourse }) {
+/** 백엔드 응답 모양으로 돌려줌 ({ answer, quick_replies, conditions, course? }) */
+async function mockChat({ message, history, region, festival_id: festivalId, previous_course: previousCourse }) {
   await delay(1600);
   if (++usedToday > DAILY_LIMIT) throw new ChatLimitError();
+  const messages = [...history.map((h) => ({ role: h.role, text: h.content })), { role: "user", text: message }];
+  const r = await mockReply(messages, region, festivalId, previousCourse);
+  const conditions = { off_topic: r.type === "refuse" && r.text === OFF_TOPIC, region: null, duration: r.course?.duration ?? null,
+    companion: null, preference: null, date: null };
+  return { answer: r.text, quick_replies: r.quickReplies ?? [], conditions, ...(r.course ? { course: r.course } : {}) };
+}
 
+async function mockReply(messages, region, festivalId, previousCourse) {
   const userTexts = messages.filter((m) => m.role === "user").map((m) => m.text);
   const last = userTexts.at(-1) ?? "";
   const all = userTexts.join(" ");
-  const asked = (q) => messages.some((m) => m.role === "assistant" && m.text.startsWith(q));
+  const asked = (q) => messages.some((m) => m.role === "assistant" && m.text.includes(q));
 
   const [festivals, places, sidoList] = await Promise.all([loadMockFestivals(), loadMockPlaces(), fetchRegions()]);
   if (previousCourse) return reviseCourse(previousCourse, last, places);
@@ -69,11 +102,11 @@ async function mockChat({ messages, region, festivalId, previousCourse }) {
   const city = findCity(all, sidoList);
   // 서비스와 무관한 질문: 되묻기에 답하는 중이 아니고, 마지막 말에 여행 관련 내용이 없을 때
   const prev = messages.at(-2);
-  const answering = prev?.role === "assistant" && [ASK_DURATION, ASK_AREA, ASK_DATE].some((q) => prev.text.startsWith(q));
+  const answering = prev?.role === "assistant" && [ASK_DURATION, ASK_AREA, ASK_DATE].some((q) => prev.text.includes(q));
   const travelish = /코스|여행|축제|맛집|관광|구경|산책|바다|나들이|데이트|놀러|가고|갈래|가 ?볼|반나절|하루|먹|걷/.test(last)
     || findCity(last, sidoList) || (festival && userTexts.length === 1);
   if (!answering && !travelish) {
-    return { type: "refuse", text: "여행 코스 만들기만 도와드릴 수 있어요. 가고 싶은 지역을 말씀해 주세요." };
+    return { type: "refuse", text: OFF_TOPIC };
   }
   if (!festival && !city && !region) {
     if (!asked(ASK_AREA)) return { type: "ask", text: ASK_AREA };
