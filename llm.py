@@ -40,12 +40,9 @@ prompt = ChatPromptTemplate.from_messages([
 
   [규칙]
   1. 여행 코스와 관련된 질문에만 답한다.
-  2. 여행과 관련 없는 질문(주식, 숙제, 코딩, 날씨 등)에는 아래 문장만 그대로 답한다.
-     "여행 코스 만들기만 도와드릴 수 있어요. 가고 싶은 지역을 말씀해 주세요."
-  3. 지역이나 시간(반나절/하루)을 모르면 한 번만 짧게 되묻는다.
-  4. 방문 날짜를 말하지 않으면 오늘 간다고 생각한다.
-  5. 운영시간, 요금, 전화번호처럼 모르는 정보는 지어내지 말고 "방문 전 확인해 주세요"라고 한다.
-  6. 답은 3문장 이내로 짧게 한다. 마크다운(**, #, -)과 이모지는 쓰지 않는다.
+  2. 방문 날짜를 말하지 않으면 오늘 간다고 생각한다.
+  3. 운영시간, 요금, 전화번호처럼 모르는 정보는 지어내지 말고 "방문 전 확인해 주세요"라고 한다.
+  4. 답은 3문장 이내로 짧게 한다. 마크다운(**, #, -)과 이모지는 쓰지 않는다.
   
 
   [예시]
@@ -129,9 +126,11 @@ def fix_date(value, today:date) -> str | None:
 def extract_conditions(query:str, history:list[dict] | None = None) -> dict | None:
     """대화에서 여행 조건을 뽑음. 두 번 다 실패하면 None (부르는 쪽에서 AI_ERROR_MESSAGE 안내)"""
     today = date.today()
+    # 사용자 메시지만 넘김 (AI 질문 "반나절과 하루 중…" 의 단어를 사용자 답으로 착각하지 않도록)
+    user_history = [h for h in history or [] if h['role'] == 'user']
     for _ in range(2):  # 실패하거나 형식이 틀리면 한 번 더 시도 (CM10-8)
         try:
-            text = extract_chain.invoke({'query':query,'history':to_messages(history or []),'today':today.isoformat()}).content
+            text = extract_chain.invoke({'query':query,'history':to_messages(user_history),'today':today.isoformat()}).content
         except Exception:  # 타임아웃, 모델 프로세스 종료 등
             continue
         try:
@@ -147,5 +146,58 @@ def extract_conditions(query:str, history:list[dict] | None = None) -> dict | No
         conditions['date'] = fix_date(conditions['date'], today)
         return conditions
     return None
+
+# 서비스와 무관한 질문에 답하는 문구 (CM10-10)
+OFF_TOPIC_MESSAGE = "여행 코스 만들기만 도와드릴 수 있어요. 가고 싶은 지역을 말씀해 주세요."
+
+# 되묻기 (CM10-5): 지역 · 시간이 부족하면 한 번 되묻고, 빠른 답 버튼(반나절 / 하루)을 줌
+DURATION_QUESTION = "반나절과 하루 중 얼마나 다녀오실 예정인가요?"
+REGION_AND_DURATION_QUESTION = f"어느 지역으로, {DURATION_QUESTION}"
+DURATION_REPLIES = ['반나절', '하루']
+DEFAULT_DURATION = 'half'  # 한 번 되물어도 답이 없을 때 (설계서에 없음, 팀과 협의 필요)
+
+def already_asked(history:list[dict]) -> bool:
+    """이전에 시간(반나절/하루)만 따로 되물은 적이 있는지
+
+    지역과 같이 물은 질문은 세지 않음 (지역만 답했을 때 시간이 기본값으로 정해지지 않도록)
+    """
+    return any(h['role'] == 'assistant' and DURATION_QUESTION in h['content']
+               and h['content'] != REGION_AND_DURATION_QUESTION for h in history)
+
+def ask_missing(conditions:dict, history:list[dict]) -> dict | None:
+    """지역이나 시간이 빠졌으면 되물을 질문과 빠른 답 버튼. 다 있으면 None
+
+    지역은 없으면 코스를 만들 수 없어서 계속 묻고, 시간은 한 번만 묻는다.
+    """
+    region, duration = conditions['region'], conditions['duration']
+    ask_duration = not duration and not already_asked(history)
+    if not region and ask_duration:
+        return {'answer': REGION_AND_DURATION_QUESTION, 'quick_replies': DURATION_REPLIES}
+    if not region:
+        return {'answer': '어느 지역으로 가고 싶으세요?', 'quick_replies': []}
+    if ask_duration:
+        return {'answer': f'{region}에 {DURATION_QUESTION}', 'quick_replies': DURATION_REPLIES}
+    return None
+
+def handle_chat(message:str, history:list[dict] | None = None) -> dict:
+    """챗봇 한 번 주고받기 (/api/chat 에서 부를 함수)
+
+    돌려주는 값: {"answer": 답변, "quick_replies": 빠른 답 버튼, "conditions": 뽑은 조건 또는 None}
+    """
+    history = history or []
+    conditions = extract_conditions(message, history)
+    if conditions is None:
+        return {'answer': AI_ERROR_MESSAGE, 'quick_replies': [], 'conditions': None}
+    if conditions['off_topic']:
+        return {'answer': OFF_TOPIC_MESSAGE, 'quick_replies': [], 'conditions': conditions}
+
+    missing = ask_missing(conditions, history)
+    if missing:
+        return {**missing, 'conditions': conditions}
+    if not conditions['duration']:  # 한 번 물었는데도 답이 없으면 기본값
+        conditions['duration'] = DEFAULT_DURATION
+
+    # 조건이 다 모였음 → 지금은 대화로 답하고, 나중에 코스 만들기(7·8번)로 교체
+    return {'answer': chat_answer(message, history), 'quick_replies': [], 'conditions': conditions}
 
 
