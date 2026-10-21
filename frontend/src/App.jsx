@@ -1,6 +1,7 @@
 import { Outlet, Route, Routes } from "react-router";
 import Header from "./components/Header.jsx";
 import { ToastProvider } from "./components/Toast.jsx";
+import { CourseProvider } from "./course/CourseProvider.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import FestivalListPage from "./pages/FestivalListPage.jsx";
 import FestivalDetailPage from "./pages/FestivalDetailPage.jsx";
@@ -18,14 +19,16 @@ function Layout() {
 export default function App() {
   return (
     <ToastProvider>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route index element={<HomePage />} />                             {/* H110 · H120 (준비 중) */}
-          <Route path="festivals" element={<FestivalListPage />} />           {/* L110 */}
-          <Route path="festivals/:id" element={<FestivalDetailPage />} />     {/* D110 */}
-          <Route path="*" element={<NotFoundPage />} />                       {/* E110 */}
-        </Route>
-      </Routes>
+      <CourseProvider>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route index element={<HomePage />} />                             {/* H110 · H120 */}
+            <Route path="festivals" element={<FestivalListPage />} />           {/* L110 */}
+            <Route path="festivals/:id" element={<FestivalDetailPage />} />     {/* D110 */}
+            <Route path="*" element={<NotFoundPage />} />                       {/* E110 */}
+          </Route>
+        </Routes>
+      </CourseProvider>
     </ToastProvider>
   );
 }
