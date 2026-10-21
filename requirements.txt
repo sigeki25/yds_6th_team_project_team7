@@ -11,5 +11,6 @@ python-dotenv
 langchain-core
 langchain-ollama
 
-# chroma
-chroma
+# chromadb
+chromadb
+
