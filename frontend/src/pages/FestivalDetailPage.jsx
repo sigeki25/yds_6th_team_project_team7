@@ -7,6 +7,7 @@ import KakaoMap from "../components/KakaoMap.jsx";
 import NoticeBox from "../components/NoticeBox.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 import { useToast } from "../components/toastContext.js";
+import { useCourse } from "../course/courseContext.js";
 import {
   festivalStatus, firstSentence, formatPeriodFull, MISSING_TEXT, REGION_BY_SIDO, safeUrl,
 } from "../lib/festival.js";
@@ -86,6 +87,7 @@ function FestivalDetailPage({ id }) {
 
 function FestivalDetail({ festival: f }) {
   const navigate = useNavigate();
+  const { attach } = useCourse();
   const status = festivalStatus(f);
   const ended = status === "ended";
   const intro = firstSentence(f.overview);
@@ -94,11 +96,8 @@ function FestivalDetail({ festival: f }) {
   /** 6. 이 축제로 코스 만들기 → 축제가 속한 권역의 지도 홈(H120) + 채팅 첨부 칩 */
   function makeCourse() {
     const region = REGION_BY_SIDO[f.sidoCode];
-    navigate(region ? `/?region=${region}` : "/", {
-      state: {
-        attachFestival: { id: f.id, title: f.title, startDate: f.startDate, endDate: f.endDate, status },
-      },
-    });
+    attach({ id: f.id, title: f.title, startDate: f.startDate, endDate: f.endDate });
+    navigate(region ? `/?region=${region}` : "/");
   }
 
   const rows = [

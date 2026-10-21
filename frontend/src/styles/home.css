@@ -1,0 +1,112 @@
+/* H110 · H120 지도 홈 */
+.home { flex: 1; width: 100%; max-width: 1440px; margin: 0 auto; padding: 20px 24px 0; }
+.home__top {
+  display: grid; grid-template-columns: 340px minmax(0, 1fr) 360px; gap: 16px;
+  height: calc(100vh - 60px - 40px); min-height: 560px; max-height: 860px;
+}
+.home__nation, .home__center, .home__chat {
+  min-height: 0; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius);
+}
+.home__tabs { display: none; }
+
+/* 1 · 2 · 3. 전국 권역 지도 */
+.home__nation { display: flex; flex-direction: column; padding: 18px 8px 12px; }
+.home__nation-title { padding: 0 8px; }
+.home__nation-title { margin: 0 0 8px; font-size: 16px; font-weight: 700; }
+.korea-map { flex: 1; min-height: 0; width: 100%; }
+.korea-map__region { cursor: pointer; outline: none; }
+.korea-map__region path, .korea-map__region circle {
+  fill: var(--c-region); stroke: #fff; stroke-width: 1; transition: fill .12s;
+}
+.korea-map__region:hover path, .korea-map__region:hover circle,
+.korea-map__region:focus-visible path, .korea-map__region:focus-visible circle { fill: #2E8C82; }
+.korea-map__region.is-selected path, .korea-map__region.is-selected circle { fill: var(--c-region-selected); }
+.korea-map__region.is-selected:hover path { fill: #AEB1DD; }
+.korea-map__region:focus-visible path { stroke: var(--c-text); stroke-width: 2; }
+.korea-map__label {
+  font-size: 23px; font-weight: 700; fill: var(--c-text); pointer-events: none;
+  paint-order: stroke; stroke: #fff; stroke-width: 5px; stroke-linejoin: round;
+}
+.korea-map__island { font-size: 17px; fill: var(--c-text-sub); pointer-events: none; }
+.region-chips { display: none; }
+
+/* 4. 권역 선택 전 안내 */
+.home__center { position: relative; overflow: hidden; display: flex; flex-direction: column; }
+.nation-guide {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  text-align: center; padding: 24px;
+  background: repeating-linear-gradient(135deg, #FAF8F4 0 14px, #F5F2EC 14px 28px);
+}
+.nation-guide__title { margin: 0; font-size: 19px; font-weight: 600; line-height: 1.6; color: var(--c-text-sub); }
+.nation-guide__count { margin: 0; padding: 8px 18px; border-radius: 999px; background: var(--c-primary-soft); color: var(--c-primary); }
+
+/* H120 2. 권역 이름 · 축제 수 + 지도 */
+.region-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.region-panel__title {
+  margin: 0; padding: 14px 18px; font-size: 17px; font-weight: 700;
+  display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--c-border);
+}
+.region-panel__count {
+  min-width: 26px; height: 24px; padding: 0 8px; border-radius: 999px; display: inline-grid; place-items: center;
+  background: var(--c-festival); color: #fff; font-size: 13px;
+}
+.region-panel__skeleton { flex: 1; border-radius: 0; }
+.region-panel__error { margin: auto; color: var(--c-text-sub); }
+.region-map { position: relative; flex: 1; min-height: 0; }
+.region-map__canvas { position: absolute; inset: 0; }
+.region-map__fallback { position: absolute; inset: 0; overflow: auto; padding: 16px 18px; }
+.region-map__fallback-title { margin: 0 0 12px; color: var(--c-text-sub); }
+.region-map__course { margin: 0 0 12px; padding: 10px 14px; list-style: none; background: var(--c-primary-soft); border-radius: var(--radius-sm); }
+.region-map__list { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px; }
+.region-map__list a {
+  display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border-radius: 6px;
+  background: var(--c-festival); color: #fff; font-size: 13px; font-weight: 600;
+}
+.region-map__list a:hover { background: #B23A17; }
+
+/* 5. AI 코스 도우미 */
+.home__chat { display: flex; overflow: hidden; }
+
+/* 6. 이번 달 축제 */
+.home__month { margin-top: 40px; }
+.home__month-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+.home__month-head h2 { margin: 0; font-size: 20px; }
+.home__month-all { color: var(--c-text-sub); font-weight: 600; min-height: var(--touch); display: inline-flex; align-items: center; }
+.home__month-all:hover { color: var(--c-text); text-decoration: underline; }
+.home__month-empty { color: var(--c-text-sub); }
+
+@media (max-width: 1100px) {
+  .home__top { grid-template-columns: 260px minmax(0, 1fr) 320px; }
+  .korea-map__label { font-size: 27px; }
+}
+
+/* M110 모바일: 권역 버튼 → 지도(약 40%) → 탭(AI 코스 도우미 / 이번 달 축제) */
+@media (max-width: 767px) {
+  .home { padding: 12px 0 0; }
+  .home__top { display: flex; flex-direction: column; height: auto; max-height: none; min-height: 0; gap: 0; }
+  .home__nation { padding: 0 0 10px; border: 0; border-radius: 0; background: none; }
+  .home__nation-title, .korea-map { display: none; }
+  .region-chips {
+    display: flex; gap: 8px; overflow-x: auto; padding: 0 16px; scrollbar-width: none;
+  }
+  .region-chips button {
+    flex: none; min-height: 40px; padding: 0 14px; border-radius: 999px; cursor: pointer;
+    border: 1.5px solid var(--c-border); background: var(--c-surface); font-size: 14px; white-space: nowrap;
+  }
+  .region-chips button[aria-pressed="true"] { background: var(--c-region-selected); border-color: #8E92C9; font-weight: 700; }
+  .home__center { height: 40vh; min-height: 260px; border-radius: 0; border-left: 0; border-right: 0; }
+  .nation-guide__title { font-size: 16px; }
+  .home__tabs {
+    display: flex; position: sticky; top: 60px; z-index: 5; background: var(--c-surface); border-bottom: 1px solid var(--c-border);
+  }
+  .home__tabs button {
+    flex: 1; min-height: var(--touch); border: 0; background: none; cursor: pointer;
+    border-bottom: 3px solid transparent; color: var(--c-text-sub);
+  }
+  .home__tabs button[aria-selected="true"] { color: var(--c-text); font-weight: 700; border-bottom-color: var(--c-primary); }
+  .home__chat { border: 0; border-radius: 0; min-height: 60vh; }
+  .home[data-tab="month"] .home__chat { display: none; }
+  .home[data-tab="chat"] .home__month { display: none; }
+  .home__month { margin: 0; padding: 16px; }
+  .home__month-head { display: none; }
+}

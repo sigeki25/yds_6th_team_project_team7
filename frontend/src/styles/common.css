@@ -156,6 +156,86 @@ img { display: block; max-width: 100%; }
 .notice-box__title { margin: 0 0 4px; color: var(--c-text); font-weight: 600; }
 .notice-box__desc { margin: 0 0 20px; }
 
+/* 4. 장소 종류: 번호 마커 (축제 라벨형 · 관광지 원 · 음식점 마름모) */
+.place-mark {
+  flex: none; width: 26px; height: 26px; display: inline-grid; place-items: center;
+  color: #fff; font-size: 13px; font-weight: 700; line-height: 1;
+  border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.18);
+}
+.place-mark--festival { background: var(--c-festival); border-radius: 6px; }
+.place-mark--attraction { background: var(--c-attraction); border-radius: 50%; }
+.place-mark--food { background: var(--c-food); transform: rotate(45deg) scale(.86); border-radius: 3px; }
+.place-mark--food > span { transform: rotate(-45deg) scale(1.16); }
+
+/* 범례 아이콘 (지도 점과 같은 모양) */
+.legend-icon { flex: none; display: inline-block; width: 12px; height: 12px; }
+.legend-icon--festival { background: var(--c-festival); border-radius: 3px; width: 16px; height: 11px; }
+.legend-icon--attraction { background: var(--c-attraction); border-radius: 50%; }
+.legend-icon--food { background: var(--c-food); transform: rotate(45deg) scale(.85); }
+.legend-icon--route { width: 20px; height: 0; border-top: 3px dashed var(--c-primary); }
+
+/* 지도 위 오버레이 (카카오맵 CustomOverlay) */
+.map-label {
+  display: block; max-width: 180px; padding: 3px 9px; cursor: pointer;
+  background: var(--c-festival); color: #fff; border: 1.5px solid #fff; border-radius: 6px;
+  font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25);
+}
+.map-label:hover, .map-label:focus-visible { background: #B23A17; max-width: none; position: relative; z-index: 3; }
+.map-dot {
+  position: relative; display: block; width: 10px; height: 10px;
+  border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.2);
+}
+.map-dot--attraction { background: var(--c-attraction); border-radius: 50%; }
+.map-dot--food { background: var(--c-food); transform: rotate(45deg); }
+.map-dot--nearby { background: #A8A29B; border-radius: 50%; }
+.map-dot::after {
+  content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%);
+  padding: 4px 8px; border-radius: 6px; background: #2B2B2B; color: #fff; font-size: 12px; white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity .1s;
+}
+.map-dot--food::after { transform: rotate(-45deg) translate(-30%, -20%); transform-origin: left bottom; }
+.map-dot:hover { z-index: 4; }
+.map-dot:hover::after { opacity: 1; }
+.map-course-mark { display: block; padding: 0; border: 0; background: none; cursor: pointer; }
+.map-course-mark .place-mark { width: 32px; height: 32px; font-size: 15px; }
+.map-course-mark.is-active .place-mark { box-shadow: 0 0 0 4px rgba(46,94,70,.45); }
+.map-leg {
+  display: block; padding: 2px 7px; border-radius: 999px; background: #fff; border: 1px solid var(--c-primary);
+  color: var(--c-primary); font-size: 11.5px; font-weight: 600; white-space: nowrap;
+}
+.map-leg--estimated { border-color: var(--c-warn); color: var(--c-warn); }
+
+/* 축제 첨부 칩 · 주의 문구 · 점 애니메이션 */
+.festival-chip {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+  padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  background: #FBE9E3; color: #9E3412; border: 1px solid #F1C3B3;
+}
+.festival-chip::before { content: ""; flex: none; width: 10px; height: 8px; border-radius: 2px; background: var(--c-festival); }
+.festival-chip button {
+  border: 0; background: none; cursor: pointer; color: inherit; padding: 0 2px;
+  min-width: 28px; min-height: 28px; font-size: 13px;
+}
+.text-warn { color: var(--c-warn); font-weight: 600; }
+.dots { display: inline-flex; gap: 4px; margin-right: 8px; vertical-align: middle; }
+.dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--c-primary); animation: dot 1.2s infinite ease-in-out; }
+.dots i:nth-child(2) { animation-delay: .15s; }
+.dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes dot { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .dots i { animation: none; } }
+
+/* 지도 범례 */
+.map-legend {
+  position: absolute; left: 12px; bottom: 12px; z-index: 2; margin: 0;
+  display: flex; gap: 6px 14px; flex-wrap: wrap; padding: 8px 12px; list-style: none;
+  background: rgba(255,255,255,.95); border: 1px solid var(--c-border); border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+.map-legend li, .map-legend__item { display: inline-flex; align-items: center; gap: 6px; }
+.map-legend__item { cursor: pointer; min-height: 28px; }
+.map-legend__item input { margin: 0; accent-color: var(--c-primary); width: 16px; height: 16px; }
+
 @media (max-width: 767px) {
   .site-header__inner { gap: 24px; padding: 0 16px; }
   .site-nav { gap: 20px; }
