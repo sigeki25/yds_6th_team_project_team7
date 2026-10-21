@@ -11,3 +11,5 @@ langchain-ollama
 # chromadb
 chromadb
 
+# GPS 거리 구하기
+haversine
