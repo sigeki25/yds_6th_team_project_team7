@@ -29,6 +29,18 @@ def _app_page() -> HTMLResponse:
     return HTMLResponse(html)
 
 
+@router.get("/")
+def home_page():
+    """H110 지도 홈 · H120 권역 선택 (/?region=)"""
+    return _app_page()
+
+
+@router.get("/course")
+def course_page():
+    """R110 코스 결과 (코스는 저장하지 않아 새로고침하면 지도 홈으로 감)"""
+    return _app_page()
+
+
 @router.get("/festivals")
 def festival_list_page():
     """L110 축제 목록"""
