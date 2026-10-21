@@ -1,0 +1,62 @@
+/* D110 축제 상세 */
+.back-link {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: var(--touch); margin: -8px 0 12px; color: var(--c-text);
+}
+.back-link:hover { text-decoration: underline; }
+
+.detail {
+  display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 32px; align-items: start;
+}
+
+/* 2. 포스터 */
+.detail__poster {
+  aspect-ratio: 5 / 7; border-radius: 16px; overflow: hidden;
+  background: var(--c-primary-soft);
+}
+.detail__poster { position: relative; }
+.detail__poster img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+/* 3. 상태 · 축제명 · 소개 */
+.detail__title { margin: 12px 0 6px; font-size: 32px; line-height: 1.3; font-weight: 800; word-break: keep-all; }
+.detail__intro { margin: 0; color: var(--c-text-sub); }
+.detail__divider { border: 0; border-top: 1px solid var(--c-border); margin: 20px 0; }
+
+/* 4. 상세 정보 */
+.info-list { display: grid; row-gap: 12px; margin: 0; }
+.info-list__row { display: grid; grid-template-columns: 56px minmax(0, 1fr); }
+.info-list dt { color: var(--c-text-sub); font-weight: 600; font-size: 14px; padding-top: 1px; }
+.info-list dd { margin: 0; word-break: break-all; }
+
+/* 5 · 6 · 7 버튼 */
+.detail__actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; margin-top: 24px; }
+.detail__actions .btn { min-width: 160px; }
+.detail__actions .btn--primary { min-width: 200px; }
+.ended-note { flex-basis: 100%; margin: 0; font-size: 13px; color: var(--c-text-sub); }
+
+/* 8. 위치 지도 */
+.detail__map {
+  position: relative; margin-top: 24px; height: 280px;
+  border: 1px solid var(--c-border); border-radius: var(--radius); overflow: hidden;
+  background: var(--c-primary-soft);
+}
+.detail__map-canvas { width: 100%; height: 100%; }
+.detail__map-empty {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--c-text-sub);
+}
+.detail__map-source {
+  position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 2;
+  margin: 0 auto; width: fit-content; max-width: calc(100% - 20px);
+  background: rgba(255, 255, 255, .94); border: 1px solid var(--c-border); border-radius: 6px;
+  padding: 4px 12px; font-size: 12px; color: var(--c-text-sub); text-align: center;
+}
+
+.notice-box--page { max-width: 560px; margin: 40px auto; }
+
+@media (max-width: 767px) {
+  .detail { grid-template-columns: 1fr; gap: 20px; }
+  .detail__poster { max-width: 320px; width: 100%; margin: 0 auto; }
+  .detail__title { font-size: 26px; }
+  .detail__actions .btn { flex: 1; min-width: 0; }
+}

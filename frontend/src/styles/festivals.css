@@ -1,0 +1,73 @@
+/* L110 축제 목록 */
+.search-bar {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr 1fr 1fr auto;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.search-bar__period { display: flex; gap: 8px; min-width: 0; }
+.search-bar__period .select { flex: 1; min-width: 0; }
+.search-bar__submit { min-width: 120px; }
+
+.select {
+  height: var(--touch); width: 100%; padding: 0 40px 0 14px;
+  background: var(--c-surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%235F5A54' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 14px center;
+  border: 1.5px solid var(--c-border); border-radius: var(--radius-sm);
+  appearance: none; cursor: pointer;
+}
+.select:hover:not(:disabled) { border-color: var(--c-text-sub); }
+.select:disabled { color: var(--c-disabled-text); background-color: #F3F1ED; cursor: not-allowed; }
+.select--month { background-image: none; padding-right: 10px; }
+
+.list-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 16px;
+}
+.result-count { margin: 0; color: var(--c-text-sub); }
+.result-count strong { color: var(--c-text); }
+
+.sort-toggle { display: flex; gap: 8px; }
+.sort-toggle__btn {
+  min-height: 36px; padding: 0 18px; border-radius: 999px; cursor: pointer;
+  background: var(--c-surface); border: 1.5px solid var(--c-border); font-size: 14px;
+}
+.sort-toggle__btn[aria-pressed="true"] {
+  background: var(--c-primary-soft); border-color: var(--c-primary);
+  color: var(--c-primary); font-weight: 700;
+}
+/* 누르는 영역 44px 확보 */
+.sort-toggle__btn { position: relative; }
+.sort-toggle__btn::after { content: ""; position: absolute; inset: -4px 0; }
+
+.festival-grid {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px;
+  transition: opacity .15s;
+}
+.festival-grid[aria-busy="true"] { opacity: .5; pointer-events: none; }
+.festival-grid:empty { display: none; }
+
+.skeleton-card { border-radius: var(--radius); overflow: hidden; background: var(--c-surface); border: 1px solid var(--c-border); }
+.skeleton-card__poster { aspect-ratio: 16 / 10; border-radius: 0; }
+.skeleton-card__line { height: 14px; margin: 14px 16px 0; }
+.skeleton-card__line--short { width: 55%; margin-bottom: 18px; }
+
+.more-wrap { display: flex; justify-content: center; margin-top: 28px; }
+.btn--more {
+  min-width: 200px; background: var(--c-surface); border: 1.5px dashed var(--c-border);
+  border-radius: 999px; color: var(--c-text-sub); font-weight: 500;
+}
+.btn--more:hover { border-color: var(--c-text-sub); color: var(--c-text); }
+
+@media (max-width: 1023px) {
+  .search-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .search-bar__period, .search-bar__submit { grid-column: 1 / -1; }
+  .festival-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 767px) {
+  .festival-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .list-head { flex-wrap: wrap; }
+}
+@media (max-width: 479px) {
+  .search-bar { grid-template-columns: 1fr; }
+  .festival-grid { grid-template-columns: 1fr; }
+}
