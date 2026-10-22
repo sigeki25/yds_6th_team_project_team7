@@ -5,6 +5,8 @@ from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_ollama import ChatOllama
 
+from course import DURATION_NAMES, build_course
+
 def get_llm(temperature:float=0.2, format:str|None=None) -> ChatOllama:
     return ChatOllama(
         model="gemma4:e4b",
@@ -179,6 +181,19 @@ def ask_missing(conditions:dict, history:list[dict]) -> dict | None:
         return {'answer': f'{region}에 {DURATION_QUESTION}', 'quick_replies': DURATION_REPLIES}
     return None
 
+# 코스를 못 만들었을 때 문구 (build_course 의 실패 이유별)
+COURSE_FAIL_MESSAGES = {
+    'no_region': '지역을 찾지 못했어요. 시 · 군 이름으로 다시 말씀해 주세요.',
+    'no_places': '이 지역에는 코스로 묶을 장소가 아직 없어요. 다른 지역을 말씀해 주세요.',
+    'api': AI_ERROR_MESSAGE,
+}
+
+def course_message(course:dict) -> str:
+    """코스 완성 안내 (CM10-7). 예: '강릉 하루 코스를 골랐어요 (방문일: 오늘 기준). 지도에 번호로 표시했습니다.'"""
+    day = DURATION_NAMES[course['duration']]
+    date_text = '오늘 기준' if course['baseDateDefault'] else course['baseDate']
+    return f"{course['region']} {day} 코스를 골랐어요 (방문일: {date_text}). 지도에 번호로 표시했습니다."
+
 def handle_chat(message:str, history:list[dict] | None = None) -> dict:
     """챗봇 한 번 주고받기 (/api/chat 에서 부를 함수)
 
@@ -197,7 +212,10 @@ def handle_chat(message:str, history:list[dict] | None = None) -> dict:
     if not conditions['duration']:  # 한 번 물었는데도 답이 없으면 기본값
         conditions['duration'] = DEFAULT_DURATION
 
-    # 조건이 다 모였음 → 지금은 대화로 답하고, 나중에 코스 만들기(7·8번)로 교체
-    return {'answer': chat_answer(message, history), 'quick_replies': [], 'conditions': conditions}
+    # 조건이 다 모였음 → 코스 만들기 (CM10-7)
+    course, error = build_course(conditions)
+    if course is None:
+        return {'answer': COURSE_FAIL_MESSAGES[error], 'quick_replies': [], 'conditions': conditions}
+    return {'answer': course_message(course), 'quick_replies': [], 'conditions': conditions, 'course': course}
 
 
