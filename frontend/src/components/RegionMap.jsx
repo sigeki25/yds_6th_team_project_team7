@@ -6,8 +6,8 @@ import { PLACE_TYPES, placeMarkHtml } from "../lib/places.js";
 
 const LAYERS = [
   { key: "festival", label: "축제 라벨" },
-  { key: "attraction", label: "관광지" },
-  { key: "food", label: "음식점" },
+  { key: "attraction", label: "관광지", needsCourse: true },
+  { key: "food", label: "음식점", needsCourse: true },
 ];
 
 /** '시 · 군 + 축제명' 라벨 (축제명에 지명이 이미 있으면 그대로) */
@@ -17,8 +17,13 @@ function labelOf(f) {
   return f.title.includes(city) ? f.title : `${city} ${f.title}`;
 }
 
-/** H120 가운데 권역 지도: 축제 라벨 · 관광지/음식점 점 · 코스 번호 */
-export default function RegionMap({ festivals, places, course }) {
+/** H120 가운데 권역 지도: 축제 라벨 · 관광지/음식점 점 · 코스 번호
+ *  관광지 · 음식점 점은 코스 주변(course.nearby)만 — 권역 전체를 TourAPI 로 받지 않음 */
+export default function RegionMap({ festivals, course }) {
+  const places = useMemo(
+    () => (course?.nearby ?? []).filter((p) => p.type === "attraction" || p.type === "food"),
+    [course],
+  );
   const navigate = useNavigate();
   const box = useRef(null);
   const mapRef = useRef(null);
@@ -45,16 +50,16 @@ export default function RegionMap({ festivals, places, course }) {
     return () => { cancelled = true; };
   }, []);
 
-  // 처음엔 권역 축제 · 장소가 다 보이게, 코스가 있으면 코스에 맞춤
+  // 처음엔 권역 축제가 다 보이게, 코스가 있으면 코스에 맞춤
   useEffect(() => {
     if (!ready) return;
     const { kakao } = window;
-    const pts = course ? course.places : [...festivals, ...places];
+    const pts = course ? course.places : festivals;
     if (!pts.length) return;
     const bounds = new kakao.maps.LatLngBounds();
     pts.forEach((p) => bounds.extend(new kakao.maps.LatLng(p.lat, p.lng)));
     mapRef.current.setBounds(bounds, 40, 40, 40, 40);
-  }, [ready, festivals, places, course]);
+  }, [ready, festivals, course]);
 
   // 3. 축제 라벨 (클릭 → D110)
   useOverlays(ready && show.festival, mapRef, festivals, (f) => {
@@ -66,7 +71,7 @@ export default function RegionMap({ festivals, places, course }) {
     return { el, yAnchor: 1.2 };
   });
 
-  // 4. 관광지 원 · 음식점 마름모 (마우스오버 툴팁, 클릭 이동 없음)
+  // 4. 코스 주변 관광지 원 · 음식점 마름모 (마우스오버 툴팁, 클릭 이동 없음)
   const shownPlaces = useMemo(() => places.filter((p) => show[p.type]), [places, show]);
   useOverlays(ready, mapRef, shownPlaces, (p) => {
     const el = document.createElement("span");
@@ -116,11 +121,11 @@ export default function RegionMap({ festivals, places, course }) {
         </div>
       )}
 
-      {/* 5. 범례 · 표시 켜고 끄기 (색 + 모양) */}
+      {/* 5. 범례 · 표시 켜고 끄기 (색 + 모양). 관광지 · 음식점은 코스가 있을 때만 */}
       {!failed && (
         <fieldset className="map-legend">
           <legend className="sr-only">지도 표시</legend>
-          {LAYERS.map((l) => (
+          {LAYERS.filter((l) => !l.needsCourse || course).map((l) => (
             <label key={l.key} className="map-legend__item">
               <input
                 type="checkbox"
