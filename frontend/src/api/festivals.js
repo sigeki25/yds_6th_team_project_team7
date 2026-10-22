@@ -11,15 +11,12 @@
 // GET /api/festivals/:id
 //   → search_festival_data(contentid=id). items 가 비면 없는 축제
 //
-// GET /api/places?sido=44&content_type_id=12&size=100     (12 관광지, 39 음식점)   ※ 엔드포인트 아직 없음 → 항상 mock
-//   → area_based_list(sido, sigungu, content_type_id, page, size)
-//   → 200 { "total", "page", "size", "items": [Place, ...] }
-//
 // Festival = { id, title, startDate:"2026-10-16", endDate, sidoCode, sido:"충청남도",
 //              sigunguCode, sigungu:"서산시", category, image, lat, lng }
 // FestivalDetail = Festival + { address, tel, sponsor, fee, homepage, overview, place, playtime }
-// Place = { id, contentTypeId, title, address, tel, image, lat, lng, sidoCode, sido, sigunguCode, sigungu, category, distance }
 //   - 값이 없으면 null (AI 추정값 금지, TourAPI 원본 값만)
+//
+// 관광지 · 음식점은 권역 단위로 받지 않음 (TourAPI 호출량). 코스 주변 것만 chat.js 의 course.nearby 로 받음
 //
 // TourAPI 가 못 하는 것은 화면에서 처리함: 7개 권역(→ 시·도 여러 번 호출), 종료 제외(→ startDate=오늘),
 // 축제만 남기기(분류 EV01), 축제일순 · 가까운 순 정렬, 12개씩 나눠 보기
@@ -28,14 +25,11 @@
 import { asset, distanceKm, festivalStatus, REGION_BY_SIDO, STATUS, today } from "../lib/festival.js";
 
 export const USE_MOCK = true;
-const PLACES_MOCK = true; // /api/places 엔드포인트가 생기면 false
 
 export class NotFoundError extends Error {}
 
 const FESTIVAL_CATEGORY = "EV01"; // 분류 '축제' (공연 · 행사는 뺌)
 const FETCH_SIZE = 1000;          // 한 번에 다 받아 화면에서 정렬 · 페이지 나눔
-const PLACE_TYPES = { 12: "attraction", 39: "food" };
-const PLACE_SIZE = 100;           // 시·도 · 종류별로 받는 장소 수
 
 /** 권역 → 시·도 코드 목록 */
 const sidosOf = (region) => Object.keys(REGION_BY_SIDO).filter((code) => REGION_BY_SIDO[code] === region);
@@ -80,20 +74,6 @@ export async function fetchFestivals({ month, region, sido, sigungu, cat, active
   return { total: items.length, items: items.slice(from, from + Number(size)) };
 }
 
-/** 권역의 관광지 · 음식점 (좌표 없는 곳은 뺌) */
-export async function fetchPlaces(region) {
-  const calls = sidosOf(region).flatMap((sido) => Object.keys(PLACE_TYPES).map((type) =>
-    cachedGet("/api/places", { sido, content_type_id: type, page: 1, size: PLACE_SIZE })));
-  const seen = new Set();
-  const items = (await Promise.all(calls)).flatMap((r) => r.items).flatMap((p) => {
-    const type = PLACE_TYPES[p.contentTypeId];
-    if (!type || p.lat == null || p.lng == null || seen.has(p.id)) return [];
-    seen.add(p.id);
-    return [{ ...p, type, region }];
-  });
-  return { items };
-}
-
 export async function fetchFestival(id) {
   if (USE_MOCK) return mockFestival(id);
   const { items } = await getJson(`/api/festivals/${encodeURIComponent(id)}`);
@@ -102,14 +82,13 @@ export async function fetchFestival(id) {
   return { address: null, tel: null, sponsor: null, fee: null, homepage: null, overview: null, ...items[0] };
 }
 
-// 같은 조건은 화면을 옮겨도 다시 부르지 않음 (TourAPI 하루 호출 수 아끼기, 새로고침하면 비움)
+// 같은 조건은 화면을 옮겨도 다시 부르지 않음 (새로고침하면 비움)
 const cache = new Map();
 function cachedGet(path, params) {
   const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== "" && v != null)).toString();
   const key = `${path}?${qs}`;
   if (!cache.has(key)) {
-    const mock = path === "/api/festivals" ? USE_MOCK : PLACES_MOCK;
-    const req = (mock ? mockGet(path, params) : getJson(key)).catch((err) => {
+    const req = (USE_MOCK ? mockGet(params) : getJson(key)).catch((err) => {
       cache.delete(key);
       throw err;
     });
@@ -144,7 +123,7 @@ function loadMockList() {
 }
 
 let mockPlaceList;
-/** 화면용 형태 (type · region 붙음). chat.js mock 도 씀 */
+/** 관광지 · 음식점 스냅샷 (type · region 붙음). chat.js mock 코스 만들기에서만 씀 */
 export function loadMockPlaces() {
   mockPlaceList ??= getJson(asset("mock/places.json"));
   return mockPlaceList;
@@ -152,20 +131,13 @@ export function loadMockPlaces() {
 
 export { loadMockList as loadMockFestivals };
 
-async function mockGet(path, q) {
+/** GET /api/festivals 흉내 */
+async function mockGet(q) {
   await delay(200);
-  let items;
-  if (path === "/api/festivals") {
-    items = (await loadMockList()).filter((f) =>
-      (!q.startDate || f.endDate >= q.startDate) && (!q.endDate || f.startDate <= q.endDate)
-      && (!q.sido || f.sidoCode === q.sido) && (!q.sigungu || f.sigunguCode === q.sigungu)
-      && (!q.category || f.category === q.category));
-  } else {
-    const typeId = { attraction: 12, food: 39 };
-    items = (await loadMockPlaces())
-      .filter((p) => p.sidoCode === q.sido && String(typeId[p.type]) === String(q.content_type_id))
-      .map(({ type, region: _r, ...p }) => ({ ...p, contentTypeId: typeId[type] }));
-  }
+  const items = (await loadMockList()).filter((f) =>
+    (!q.startDate || f.endDate >= q.startDate) && (!q.endDate || f.startDate <= q.endDate)
+    && (!q.sido || f.sidoCode === q.sido) && (!q.sigungu || f.sigunguCode === q.sigungu)
+    && (!q.category || f.category === q.category));
   const from = (q.page - 1) * q.size;
   return { total: items.length, page: q.page, size: q.size, items: items.slice(from, from + q.size) };
 }
