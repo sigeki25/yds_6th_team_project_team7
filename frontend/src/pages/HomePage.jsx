@@ -36,7 +36,7 @@ export default function HomePage() {
 
   // 코스가 나오면 그 코스의 권역 지도로
   function onCourse(made) {
-    if (made.region && made.region !== region?.code) setSearchParams({ region: made.region });
+    if (made.regionCode && made.regionCode !== region?.code) setSearchParams({ region: made.regionCode });
   }
 
   // 6. 이번 달 축제 (개최중 · 예정 4개)

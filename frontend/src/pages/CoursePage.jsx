@@ -53,7 +53,7 @@ function CourseResult({ course }) {
     <main className="course">
       <div className="course__side">
         {/* 1. 뒤로 가기: H120 (대화 · 선택 권역 유지) */}
-        <Link className="course__back" to={`/?region=${course.region}`}>
+        <Link className="course__back" to={course.regionCode ? `/?region=${course.regionCode}` : "/"}>
           <span aria-hidden="true">←</span> AI 코스 도우미
         </Link>
 
