@@ -1,6 +1,9 @@
 // 백엔드 API 호출. 백엔드가 준비되기 전에는 USE_MOCK = true 로 mock 데이터를 씀.
 //
 // ── 백엔드와 맞춘 형식 ──────────────────────────────────────────────
+// 축제는 chroma 브랜치 main.py 에 엔드포인트가 있음 (/api 없이 GET /festivals · /festivals/{id}).
+// 화면 주소 /festivals 와 겹쳐서 화면은 /api/festivals 로 부르고, 개발 서버(vite.config.js)가 /api 를 떼서 넘김
+//
 // GET /api/festivals?searchstartdate=YYYYMMDD&searchenddate=YYYYMMDD&lDongRegnCd=44&lDongSignguCd=210
 //                   &lclsSystm3=EV010400&pageNo=1&numOfRows=1000
 //   → chroma.py search_data(). 날짜 조건은 기간이 겹치는 축제 (종료일 >= 시작, 시작일 <= 끝)
@@ -9,7 +12,7 @@
 // GET /api/festivals/:id
 //   → search_data(contentid=id). item 이 비면 없는 축제
 //
-// GET /api/places?sido=44&content_type_id=12&size=100     (12 관광지, 39 음식점)
+// GET /api/places?sido=44&content_type_id=12&size=100     (12 관광지, 39 음식점)   ※ 엔드포인트 아직 없음 → 항상 mock
 //   → area_based_list(sido, sigungu, content_type_id, page, size)
 //   → 200 { "total", "page", "size", "items": [Place, ...] }
 //
@@ -27,6 +30,7 @@
 import { asset, distanceKm, festivalStatus, REGION_BY_SIDO, STATUS, today } from "../lib/festival.js";
 
 export const USE_MOCK = true;
+const PLACES_MOCK = true; // /api/places 엔드포인트가 생기면 false
 
 export class NotFoundError extends Error {}
 
@@ -136,8 +140,9 @@ function cachedGet(path, params) {
   const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== "" && v != null)).toString();
   const key = `${path}?${qs}`;
   if (!cache.has(key)) {
-    const real = path === "/api/festivals" ? getFestivalList : getJson;
-    const req = (USE_MOCK ? mockGet(path, params) : real(key)).catch((err) => {
+    const isFestival = path === "/api/festivals";
+    const mock = isFestival ? USE_MOCK : PLACES_MOCK;
+    const req = (mock ? mockGet(path, params) : (isFestival ? getFestivalList : getJson)(key)).catch((err) => {
       cache.delete(key);
       throw err;
     });

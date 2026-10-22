@@ -37,7 +37,7 @@ uvicorn main:app --reload
 
 ## 알아 둘 것
 
-- **데이터**: 백엔드 `/api/festivals` · `/api/places` 가 준비되기 전이라 `public/mock` 의 TourAPI 스냅샷을 씁니다. `src/api/festivals.js` 의 `USE_MOCK` 을 `false` 로 바꾸면 실제 API 를 부릅니다. 기대하는 응답 형식은 그 파일 맨 위에 있습니다.
+- **데이터**: 기본은 `public/mock` 의 TourAPI 스냅샷을 씁니다. 축제는 chroma 브랜치 백엔드(`GET /festivals`)에 맞춰 두어 `src/api/festivals.js` 의 `USE_MOCK` 을 `false` 로 바꾸면 실제 API 를 부릅니다 (개발 서버가 `/api/festivals` → `/festivals` 로 넘김). 관광지 · 음식점(`/api/places`)은 엔드포인트가 없어 계속 mock 입니다. 기대하는 응답 형식은 그 파일 맨 위에 있습니다.
 - **AI 코스 도우미**: `/api/chat` 이 준비되기 전이라 `src/api/chat.js` 가 규칙으로 흉내 냅니다 (AI 호출 없음, 이동 시간은 직선거리 어림). `USE_MOCK` 을 `false` 로 바꾸면 실제 API 를 부릅니다. 요청 · 응답 형식은 그 파일 맨 위에 있습니다.
 - **대화 · 코스**: 저장하지 않습니다. 새로고침하면 사라지고, `/course` 를 바로 열면 지도 홈으로 돌아갑니다.
 - **권역 코드**: `capital` · `gangwon` 같은 값은 임시입니다 (`src/lib/regions.js`). 백엔드와 맞추면 바꿉니다.
