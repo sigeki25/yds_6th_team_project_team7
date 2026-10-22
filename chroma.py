@@ -1,4 +1,5 @@
 import json
+from typing import Dict, Any
 
 import chromadb
 from chromadb.api.models import Collection
@@ -11,8 +12,8 @@ client = chromadb.PersistentClient(path="chroma_db")
 collection_festival = client.get_or_create_collection(name="searchFestival")
 
 
-# /festivals 입력 변수들
-class FilterSearchData(BaseModel):
+# /old/festivals 원본 입력 변수들
+class FilterSearchFestivalOriginalData(BaseModel):
     numOfRows: int = 10  # 한번에 조회할 수
     pageNo: int = 1  # 페이지 수
     contentid: str | None = None  # 조건 - id : 하나만 반환됨
@@ -29,6 +30,60 @@ class FilterSearchData(BaseModel):
     lclsSystm3: str | None = None  # 조건 - 분류체계 소분류
     arrange: str | None = None  # 조건 - 정렬 조건 : Response 변수명으로 지정
     reverse: bool | None = None  # 조건 - 정렬 방식 : True면 내림차순, False나 없으면 오름차순
+
+
+# /festivals 입력 변수들
+class FilterSearchFestivalData(BaseModel):
+    size: int = 10  # (numOfRows)한번에 조회할 수
+    page: int = 1  # (pageNo)페이지 수
+    id: str | None = None  # 조건(contentid) - id : 하나만 반환됨
+    content_type_id: int | None = None  # 조건(contenttypeid) - 관광타입 ID
+    startDate: str | None = None  # 조건(searchstartdate) - 시작 날짜 (YYYYMMDD)
+    endDate: str | None = None  # 조건(searchenddate) - 종료 날짜 (YYYYMMDD)
+    lng: float | None = None  # 조건(mapx) - GPS X좌표(WGS84 경도좌표) : mapy와 같이 입력
+    lat: float | None = None  # 조건(mapy) - GPS Y좌표(WGS84 경도좌표) : mapx와 같이 입력
+    radius: int | None = None  # 조건 - 거리 반경(단위: m) : mapx, mapy가 필수
+    sido: str | None = None  # 조건(lDongRegnCd) - 법정동 시도 코드
+    sigungu: str | None = None  # 조건(lDongSignguCd) - 법정동 시군구 코드
+    category: str | None = None  # 조건(lclsSystm3) - 분류체계 소분류
+    arrange: str | None = None  # 조건 - 정렬 조건 : Response 변수명으로 지정
+
+
+def convert_FilterSearchFestival_to_original(model: FilterSearchFestivalData) -> Dict[Any, Any]:
+    params = model.model_dump()
+    new_params = {}
+    new_params["numOfRows"] = params.get("size", 10)
+    new_params["pageNo"] = params.get("page", 10)
+    new_params["contentid"] = params.get("id")
+    new_params["contenttypeid"] = str(v) if (v := params.get('content_type_id')) is not None else None
+    # new_params["searchstartdate"] = params.get("startDate")
+    new_params["searchstartdate"] = (v2 if len((v2 := str(v))) == 8 else f"{v2[:4]}{v2[5:7]}{v2[8:10]}") if (v := params.get("startDate")) is not None else None
+    new_params["searchenddate"] = (v2 if len((v2 := str(v))) == 8 else f"{v2[:4]}{v2[5:7]}{v2[8:10]}") if (v := params.get("endDate")) is not None else None
+    new_params["mapx"] = str(v) if (v := params.get('lng')) is not None else None
+    new_params["mapy"] = str(v) if (v := params.get('lat')) is not None else None
+    new_params["radius"] = str(v) if (v := params.get('radius')) is not None else None
+    new_params["lDongRegnCd"] = params.get("sido", None)
+    new_params["lDongSignguCd"] = params.get("sigungu", None)
+    new_params["lclsSystm3"] = params.get("category", None)
+    new_params["arrange"] = params.get("arrange", None)
+    if new_params["arrange"] is not None:
+        if len(new_params["arrange"]) == 1:
+            if new_params["arrange"] == "A":  # 제목순
+                new_params["arrange"] = "title"
+            elif new_params["arrange"] == "C":  # 수정일순
+                new_params["arrange"] = None  # 수정일 반환 없음
+            elif new_params["arrange"] == "D":  # 생성일순
+                new_params["arrange"] = None  # 생성일 반환 없음
+            elif new_params["arrange"] == "E":  # 거리순
+                new_params["arrange"] = "dist"
+            elif new_params["arrange"] == "distance":  # 거리순
+                new_params["arrange"] = "dist"
+            elif new_params["arrange"] == "startDate":  # 거리순
+                new_params["arrange"] = "eventstartdate"
+            elif new_params["arrange"] == "endDate":  # 거리순
+                new_params["arrange"] = "eventenddate"
+    new_params["reverse"] = None
+    return new_params
 
 
 # Response(출력) 변수들
@@ -118,7 +173,7 @@ def insert_data():
 
 # insert_data()  # 최초 1회 실행(테이블 생성)
 
-def search_data(
+def search_festival_data(
         numOfRows: int = 10, pageNo: int = 1,
         contentid: str | None = None, contenttypeid: str | None = None,
         searchstartdate: str | None = None, searchenddate: str | None = None,
@@ -173,7 +228,6 @@ def search_data(
             data["dist"] = str(haversine((float(mapy), float(mapx)), (float(data["mapy"]), float(data["mapx"]))) * 1000)
         if radius is not None:
             jsonData = [data for data in jsonData if float(data["dist"]) <= float(radius)]
-    print("arrange")
     if arrange is not None:
         if reverse is None:
             reverse = False
@@ -248,6 +302,8 @@ def to_response(datalist: list, pageNo: int = 1, numOfRows: int = 10):
         new_data["image"] = data.get("firstimage", "")
         new_data["lat"] = float(data.get("mapy", "0"))
         new_data["lng"] = float(data.get("mapx", "0"))
+        if "dist" in data:
+            new_data["distance"] = float(data.get("dist"))
         new_datas.append(new_data)
     return {
         "total": len(datalist),
