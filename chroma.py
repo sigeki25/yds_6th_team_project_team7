@@ -5,29 +5,29 @@ from chromadb.api.models import Collection
 from haversine import haversine
 from pydantic import BaseModel
 
-client = chromadb.PersistentClient(path="./chroma_db")
-collection = client.get_or_create_collection(name="searchFestival2")
-
+client = chromadb.PersistentClient(path="chroma_db")
+collection = client.get_or_create_collection(name="searchFestival")
 
 
 # /festivals 입력 변수들
 class FilterSearchData(BaseModel):
-    numOfRows: int = 10                     # 한번에 조회할 수
-    pageNo: int = 1                         # 페이지 수
-    contentid: str | None = None            # 조건 - id : 하나만 반환됨
-    contenttypeid: str | None = None        # 조건 - 관광타입 ID
-    searchstartdate: str | None = None      # 조건 - 시작 날짜 (YYYYMMDD)
-    searchenddate: str | None = None        # 조건 - 종료 날짜 (YYYYMMDD)
-    mapx: str | None = None                 # 조건 - GPS X좌표(WGS84 경도좌표) : mapy와 같이 입력
-    mapy: str | None = None                 # 조건 - GPS Y좌표(WGS84 경도좌표) : mapx와 같이 입력
-    radius: str | None = None               # 조건 - 거리 반경(단위: m) : mapx, mapy가 필수
-    lDongRegnCd: str | None = None          # 조건 - 법정동 시도 코드
-    lDongSignguCd: str | None = None        # 조건 - 법정동 시군구 코드
-    lclsSystm1: str | None = None           # 조건 - 분류체계 대분류
-    lclsSystm2: str | None = None           # 조건 - 분류체계 중분류
-    lclsSystm3: str | None = None           # 조건 - 분류체계 소분류
-    arrange: str | None = None              # 조건 - 정렬 조건 : Response 변수명으로 지정
-    reverse: bool | None = None             # 조건 - 정렬 방식 : True면 내림차순, False나 없으면 오름차순
+    numOfRows: int = 10  # 한번에 조회할 수
+    pageNo: int = 1  # 페이지 수
+    contentid: str | None = None  # 조건 - id : 하나만 반환됨
+    contenttypeid: str | None = None  # 조건 - 관광타입 ID
+    searchstartdate: str | None = None  # 조건 - 시작 날짜 (YYYYMMDD)
+    searchenddate: str | None = None  # 조건 - 종료 날짜 (YYYYMMDD)
+    mapx: str | None = None  # 조건 - GPS X좌표(WGS84 경도좌표) : mapy와 같이 입력
+    mapy: str | None = None  # 조건 - GPS Y좌표(WGS84 경도좌표) : mapx와 같이 입력
+    radius: str | None = None  # 조건 - 거리 반경(단위: m) : mapx, mapy가 필수
+    lDongRegnCd: str | None = None  # 조건 - 법정동 시도 코드
+    lDongSignguCd: str | None = None  # 조건 - 법정동 시군구 코드
+    lclsSystm1: str | None = None  # 조건 - 분류체계 대분류
+    lclsSystm2: str | None = None  # 조건 - 분류체계 중분류
+    lclsSystm3: str | None = None  # 조건 - 분류체계 소분류
+    arrange: str | None = None  # 조건 - 정렬 조건 : Response 변수명으로 지정
+    reverse: bool | None = None  # 조건 - 정렬 방식 : True면 내림차순, False나 없으면 오름차순
+
 
 # Response(출력) 변수들
 """
@@ -74,8 +74,9 @@ class FilterSearchData(BaseModel):
         "totalCount": len(datalist)                     # 조건으로 검색된 데이터의 총 개수
     }
 }
-            
+
 """
+
 
 def insert_data():
     with open('./file/response_searchFestival2_296_261021.json', 'r', encoding='utf-8') as f:
@@ -90,16 +91,16 @@ def insert_data():
                     "addr2": item["addr2"],
                     "zipcode": item["zipcode"],
                     "contenttypeid": item["contenttypeid"],
-                    "createdtime": item["createdtime"],
-                    "eventstartdate": item["eventstartdate"],
-                    "eventenddate": item["eventenddate"],
+                    "createdtime": int(item["createdtime"]),
+                    "eventstartdate": int(item["eventstartdate"]),
+                    "eventenddate": int(item["eventenddate"]),
                     "firstimage": item["firstimage"],
                     "firstimage2": item["firstimage2"],
                     "cpyrhtDivCd": item["cpyrhtDivCd"],
                     "mapx": item["mapx"],
                     "mapy": item["mapy"],
                     "mlevel": item["mlevel"],
-                    "modifiedtime": item["modifiedtime"],
+                    "modifiedtime": int(item["modifiedtime"]),
                     "tel": item["tel"],
                     "lDongRegnCd": item["lDongRegnCd"],
                     "lDongSignguCd": item["lDongSignguCd"],
@@ -111,6 +112,7 @@ def insert_data():
             )
             print("one insert")
         print("insert success")
+
 
 # insert_data()  # 최초 1회 실행(테이블 생성)
 
@@ -135,9 +137,9 @@ def search_data(
     if contenttypeid is not None:
         wherelist.append({"contenttypeid": contenttypeid})
     if searchstartdate is not None:
-        wherelist.append({"eventenddate": {"$gte": searchstartdate}})
+        wherelist.append({"eventenddate": {"$gte": int(searchstartdate)}})
     if searchenddate is not None:
-        wherelist.append({"eventstartdate": {"$lte": searchenddate}})
+        wherelist.append({"eventstartdate": {"$lte": int(searchenddate)}})
     if lDongRegnCd is not None:
         wherelist.append({"lDongRegnCd": lDongRegnCd})
     if lDongSignguCd is not None:
@@ -169,14 +171,26 @@ def search_data(
             data["dist"] = str(haversine((float(mapy), float(mapx)), (float(data["mapy"]), float(data["mapx"]))) * 1000)
         if radius is not None:
             jsonData = [data for data in jsonData if float(data["dist"]) <= float(radius)]
+    print("arrange")
     if arrange is not None:
         if reverse is None:
             reverse = False
-        jsonData = sorted(
-            jsonData,
-            key=lambda x: x.get(arrange, 0),
-            reverse=reverse  # True면 내림차순(최신순), False면 오름차순
-        )
+        if arrange in ["contentid", "contenttypeid", "dist", "mapx", "mapy", "createdtime", "modifiedtime",
+                       "eventstartdate", "eventenddate"]:
+            jsonData = sorted(
+                jsonData,
+                key=lambda x: float(x.get(arrange, 0)),
+                reverse=reverse  # True면 내림차순(최신순), False면 오름차순
+            )
+        else:
+            jsonData = sorted(
+                jsonData,
+                key=lambda x: x.get(arrange, ""),
+                reverse=reverse  # True면 내림차순(최신순), False면 오름차순
+            )
+        # for i in jsonData:
+        #     print(i[arrange])
+        #     print(i["eventstartdate"] + "-" + i["eventenddate"])
     return to_response(jsonData, pageNo, numOfRows)
 
 
@@ -187,11 +201,16 @@ def to_json(collection: Collection):
         data["title"] = documents
         data["contentid"] = ids
         data.update(metadatas)
+        data["createdtime"] = str(data.get("createdtime", ""))
+        data["modifiedtime"] = str(data.get("modifiedtime", ""))
+        data["eventstartdate"] = str(data.get("eventstartdate", ""))
+        data["eventenddate"] = str(data.get("eventenddate", ""))
         list.append(data)
     return list
 
+
 def to_response(datalist: list, pageNo: int = 1, numOfRows: int = 10):
-    data = datalist[(pageNo - 1) * numOfRows : pageNo * numOfRows]
+    data = datalist[(pageNo - 1) * numOfRows: pageNo * numOfRows]
     return {
         "header": {
             "resultCode": "0000",
