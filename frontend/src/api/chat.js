@@ -25,6 +25,8 @@
 //   - hours 는 TourAPI 원본 값만, 없으면 null
 //     detailIntro2 는 contentId 하나씩만 받아서 코스에 넣은 places 만 부름 (nearby · 후보는 안 부름 → 코스 장소 수만큼만)
 //     음식점(39) opentimefood, 관광지(12) usetime. 축제는 목록에 기간이 있어 안 부름. 호출 실패면 null
+//   - legs 는 kakao_api.get_route() 의 legs 를 바꿔 씀: minutes = round(duration / 60), km = distance / 1000 (소수 1자리)
+//     길찾기 실패 구간만 직선거리로 어림하고 estimated: true
 // ────────────────────────────────────────────────────────────────
 
 import { distanceKm, festivalStatus, REGION_BY_SIDO, today } from "../lib/festival.js";
