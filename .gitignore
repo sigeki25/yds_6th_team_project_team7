@@ -6,3 +6,6 @@
 # 프론트 (frontend 폴더가 소스, view 는 빌드 결과)
 node_modules/
 /view/
+
+
+/chroma_db
