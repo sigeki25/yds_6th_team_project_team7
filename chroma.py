@@ -8,6 +8,8 @@ from pydantic import BaseModel
 client = chromadb.PersistentClient(path="./chroma_db")
 collection = client.get_or_create_collection(name="searchFestival2")
 
+
+
 # /festivals 입력 변수들
 class FilterSearchData(BaseModel):
     numOfRows: int = 10                     # 한번에 조회할 수
@@ -129,23 +131,29 @@ def search_data(
                 "metadatas",
             ]
         )), pageNo, numOfRows)
-    where = {}
+    wherelist = []
     if contenttypeid is not None:
-        where["contenttypeid"] = contenttypeid
+        wherelist.append({"contenttypeid": contenttypeid})
     if searchstartdate is not None:
-        where["eventenddate"] = {"$gte": searchstartdate}
+        wherelist.append({"eventenddate": {"$gte": searchstartdate}})
     if searchenddate is not None:
-        where["eventstartdate"] = {"$lte": searchenddate}
+        wherelist.append({"eventstartdate": {"$lte": searchenddate}})
     if lDongRegnCd is not None:
-        where["lDongRegnCd"] = lDongRegnCd
+        wherelist.append({"lDongRegnCd": lDongRegnCd})
     if lDongSignguCd is not None:
-        where["lDongSignguCd"] = lDongSignguCd
+        wherelist.append({"lDongSignguCd": lDongSignguCd})
     if lclsSystm1 is not None:
-        where["lclsSystm1"] = lclsSystm1
+        wherelist.append({"lclsSystm1": lclsSystm1})
     if lclsSystm2 is not None:
-        where["lclsSystm2"] = lclsSystm2
+        wherelist.append({"lclsSystm2": lclsSystm2})
     if lclsSystm3 is not None:
-        where["lclsSystm3"] = lclsSystm3
+        wherelist.append({"lclsSystm3": lclsSystm3})
+
+    where = None
+    if len(wherelist) == 1:
+        where = wherelist[0]
+    elif len(wherelist) > 1:
+        where = {"$and": wherelist}
     jsonData = to_json(collection.get(
         where=where,
         include=[
