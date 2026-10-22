@@ -1,13 +1,12 @@
 // 백엔드 API 호출. 백엔드가 준비되기 전에는 USE_MOCK = true 로 mock 데이터를 씀.
 //
-// ── 백엔드와 맞춘 형식 (tour_api.py 함수 인자 · 반환값 그대로) ────────────
-// GET /api/festivals?start_date=YYYYMMDD&end_date=YYYYMMDD&sido=44&sigungu=210&lclsSystm3=EV010400&page=1&size=1000
-//   → search_festival(start_date, end_date, sido, sigungu, page, size, lclsSystm3=...)
-//   - TourAPI 날짜 조건은 기간이 겹치는 축제 (종료일 >= start_date, 시작일 <= end_date)
-//   → 200 { "total": 8, "page": 1, "size": 1000, "items": [Festival, ...] }
+// ── 백엔드와 맞춘 형식 ──────────────────────────────────────────────
+// GET /api/festivals?searchstartdate=YYYYMMDD&searchenddate=YYYYMMDD&lDongRegnCd=44&lDongSignguCd=210
+//                   &lclsSystm3=EV010400&pageNo=1&numOfRows=1000
+//   → chroma.py search_data(). 날짜 조건은 기간이 겹치는 축제 (종료일 >= 시작, 시작일 <= 끝)
 //
 // GET /api/festivals/:id
-//   → get_festival_detail(id). None 이면 404
+//   → search_data(contentid=id)
 //
 // GET /api/places?sido=44&content_type_id=12&size=100     (12 관광지, 39 음식점)
 //   → area_based_list(sido, sigungu, content_type_id, page, size)
@@ -19,7 +18,7 @@
 // Place = { id, contentTypeId, title, address, tel, image, lat, lng, sidoCode, sido, sigunguCode, sigungu, category, distance }
 //   - 값이 없으면 null (AI 추정값 금지, TourAPI 원본 값만)
 //
-// TourAPI 가 못 하는 것은 화면에서 처리함: 7개 권역(→ 시·도 여러 번 호출), 종료 제외(→ start_date=오늘),
+// TourAPI 가 못 하는 것은 화면에서 처리함: 7개 권역(→ 시·도 여러 번 호출), 종료 제외(→ searchstartdate=오늘),
 // 축제만 남기기(분류 EV01), 축제일순 · 가까운 순 정렬, 12개씩 나눠 보기
 // ────────────────────────────────────────────────────────────────
 
@@ -50,8 +49,8 @@ export async function fetchFestivals({ month, region, sido, sigungu, cat, active
 
   const sidoList = region ? sidosOf(region) : [sido || ""];
   const query = (s) => ({
-    start_date: compact(start), end_date: compact(end), sido: s, sigungu: s && sigungu,
-    lclsSystm3: cat, page: 1, size: FETCH_SIZE,
+    searchstartdate: compact(start), searchenddate: compact(end), lDongRegnCd: s, lDongSignguCd: s && sigungu,
+    lclsSystm3: cat, pageNo: 1, numOfRows: FETCH_SIZE,
   });
   const results = await Promise.all(sidoList.map((s) => cachedGet("/api/festivals", query(s))));
 
@@ -152,12 +151,14 @@ async function mockGet(path, q) {
   await delay(200);
   let items;
   if (path === "/api/festivals") {
-    const start = q.start_date && dashed(q.start_date);
-    const end = q.end_date && dashed(q.end_date);
+    const start = q.searchstartdate && dashed(q.searchstartdate);
+    const end = q.searchenddate && dashed(q.searchenddate);
     items = (await loadMockList()).filter((f) =>
       (!start || f.endDate >= start) && (!end || f.startDate <= end)
-      && (!q.sido || f.sidoCode === q.sido) && (!q.sigungu || f.sigunguCode === q.sigungu)
+      && (!q.lDongRegnCd || f.sidoCode === q.lDongRegnCd) && (!q.lDongSignguCd || f.sigunguCode === q.lDongSignguCd)
       && (!q.lclsSystm3 || f.category === q.lclsSystm3));
+    const from = (q.pageNo - 1) * q.numOfRows;
+    return { total: items.length, items: items.slice(from, from + q.numOfRows) };
   } else {
     const typeId = { attraction: 12, food: 39 };
     items = (await loadMockPlaces())
