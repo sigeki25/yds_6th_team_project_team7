@@ -263,10 +263,10 @@ def _to_xy(point, index: int = 0) -> tuple:
     lng, lat = _num(x), _num(y)
     if lng is None or lat is None:
         raise ValueError(f"{index + 1}번째 장소({_name(point) or point!r})에 좌표(mapx, mapy)가 없습니다.")
-    # mapx(경도) · mapy(위도)를 거꾸로 넣은 경우 바로잡기
+    # 잘못된 좌표는 고치지 않고 오류로 알림 (자동으로 고치면 잘못 넘긴 쪽의 문제가 숨겨짐)
     if _in(lng, _LAT_RANGE) and _in(lat, _LNG_RANGE):
-        logger.warning("%d번째 장소의 경도·위도가 바뀌어 있어 바로잡았습니다.", index + 1)
-        lng, lat = lat, lng
+        raise ValueError(f"{index + 1}번째 장소의 경도·위도가 바뀌어 있습니다: mapx(경도)={x}, mapy(위도)={y}. "
+                         f"mapx 에는 127.xxx 같은 경도, mapy 에는 37.xxx 같은 위도를 넣어야 합니다.")
     if not (_in(lng, _LNG_RANGE) and _in(lat, _LAT_RANGE)):
         raise ValueError(f"{index + 1}번째 장소 좌표가 국내 범위가 아닙니다: 경도 {lng}, 위도 {lat}")
     return lng, lat
