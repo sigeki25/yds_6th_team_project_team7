@@ -8,7 +8,7 @@
 //          festival_id: "123" | null,             // 추가 제안: D110 에서 첨부한 축제
 //          previous_course: Course | null }       // 추가 제안: R110 코스 수정(1회)일 때 이전 코스
 //   응답 200 { answer, quick_replies: ["반나절","하루"], conditions,   // handle_chat 반환값 그대로
-//              course?: Course, fallback?: true }                     // 추가 제안: 코스가 완성됐을 때
+//              course?: Course, fallback?: true }                     // 조건이 다 모이면 handle_chat 이 course 를 붙임 (fallback 은 추가 제안)
 //     - conditions 가 null → AI 오류 안내 (CM10-8)
 //     - conditions.off_topic → 서비스와 무관한 질문 (CM10-10)
 //     - course 가 있으면 코스 완성 (CM10-7). fallback: AI 실패로 가까운 순 기본 코스
