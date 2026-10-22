@@ -3,8 +3,11 @@ import logging
 from fastapi import FastAPI
 from starlette.staticfiles import StaticFiles
 
+from chat_api import router as chat_router
+
 app = FastAPI()
-app.mount("/view", StaticFiles(directory="view"))
+# app.mount("/view", StaticFiles(directory="view"))  # view 폴더가 없으면 서버가 안 켜져서 주석 처리
+app.include_router(chat_router)
 
 # logger 설정
 logging.basicConfig(
