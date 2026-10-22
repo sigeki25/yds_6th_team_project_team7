@@ -1,6 +1,9 @@
 uvicorn
 fastapi
 
+# 외부 API 호출 (TourAPI, 카카오)
+requests
+
 # dot-env
 python-dotenv
 
