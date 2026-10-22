@@ -1,15 +1,15 @@
 // 백엔드 API 호출. 백엔드가 준비되기 전에는 USE_MOCK = true 로 mock 데이터를 씀.
 //
 // ── 백엔드와 맞춘 형식 ──────────────────────────────────────────────
-// 축제는 chroma.py search_data(). 화면 주소 /festivals 와 겹치지 않게 백엔드도 /api/festivals 로 받아야 함
+// 축제는 chroma.py search_festival_data(). 요청 · 응답 이름은 tour_api.py 와 같음 (chroma c0f7714)
 //
-// GET /api/festivals?searchstartdate=YYYYMMDD&searchenddate=YYYYMMDD&lDongRegnCd=44&lDongSignguCd=210
-//                   &lclsSystm3=EV010400&pageNo=1&numOfRows=1000
-//   → chroma.py search_data(). 날짜 조건은 기간이 겹치는 축제 (종료일 >= 시작, 시작일 <= 끝)
-//   → 200 { header, body: { items: { item: [TourAPI 원본, ...] }, numOfRows, pageNo, totalCount } }
+// GET /api/festivals?startDate=2026-10-01&endDate=2026-10-31&sido=44&sigungu=210&category=EV010400&page=1&size=1000
+//   → chroma.FilterSearchFestivalData. 날짜 조건은 기간이 겹치는 축제 (종료일 >= startDate, 시작일 <= endDate)
+//   → 200 { "total", "page", "size", "items": [Festival, ...] }   (chroma.to_response, 날짜는 "YYYY-MM-DD")
+//   (lat&lng[&radius=m] 를 주면 items 에 distance(m) 가 붙음. arrange 는 A 제목순 · E 거리순 · startDate · endDate)
 //
 // GET /api/festivals/:id
-//   → search_data(contentid=id). item 이 비면 없는 축제
+//   → search_festival_data(contentid=id). items 가 비면 없는 축제
 //
 // GET /api/places?sido=44&content_type_id=12&size=100     (12 관광지, 39 음식점)   ※ 엔드포인트 아직 없음 → 항상 mock
 //   → area_based_list(sido, sigungu, content_type_id, page, size)
@@ -17,12 +17,11 @@
 //
 // Festival = { id, title, startDate:"2026-10-16", endDate, sidoCode, sido:"충청남도",
 //              sigunguCode, sigungu:"서산시", category, image, lat, lng }
-//   - TourAPI 원본(contentid, mapx, mapy, lDongRegnCd ...)은 toFestival 로 바꿔 씀
 // FestivalDetail = Festival + { address, tel, sponsor, fee, homepage, overview, place, playtime }
 // Place = { id, contentTypeId, title, address, tel, image, lat, lng, sidoCode, sido, sigunguCode, sigungu, category, distance }
 //   - 값이 없으면 null (AI 추정값 금지, TourAPI 원본 값만)
 //
-// TourAPI 가 못 하는 것은 화면에서 처리함: 7개 권역(→ 시·도 여러 번 호출), 종료 제외(→ searchstartdate=오늘),
+// TourAPI 가 못 하는 것은 화면에서 처리함: 7개 권역(→ 시·도 여러 번 호출), 종료 제외(→ startDate=오늘),
 // 축제만 남기기(분류 EV01), 축제일순 · 가까운 순 정렬, 12개씩 나눠 보기
 // ────────────────────────────────────────────────────────────────
 
@@ -53,10 +52,7 @@ export async function fetchFestivals({ month, region, sido, sigungu, cat, active
   if (end && start > end) return { total: 0, items: [] };
 
   const sidoList = region ? sidosOf(region) : [sido || ""];
-  const query = (s) => ({
-    searchstartdate: compact(start), searchenddate: compact(end), lDongRegnCd: s, lDongSignguCd: s && sigungu,
-    lclsSystm3: cat, pageNo: 1, numOfRows: FETCH_SIZE,
-  });
+  const query = (s) => ({ startDate: start, endDate: end, sido: s, sigungu: s && sigungu, category: cat, page: 1, size: FETCH_SIZE });
   const results = await Promise.all(sidoList.map((s) => cachedGet("/api/festivals", query(s))));
 
   const seen = new Set();
@@ -100,37 +96,10 @@ export async function fetchPlaces(region) {
 
 export async function fetchFestival(id) {
   if (USE_MOCK) return mockFestival(id);
-  const { items } = await getFestivalList(`/api/festivals/${encodeURIComponent(id)}`);
-  if (!items.length) throw new NotFoundError(id);
-  const f = items[0];
+  const { items } = await getJson(`/api/festivals/${encodeURIComponent(id)}`);
+  if (!items?.length) throw new NotFoundError(id);
   // 상세 API(detailCommon2 · detailIntro2)를 아직 안 받아서 목록 값만 있음 (나머지는 '정보 없음')
-  return { address: null, tel: null, sponsor: null, fee: null, homepage: null, overview: null, ...f };
-}
-
-/** 백엔드 축제 응답(공공데이터포털 형식) → { total, items: [Festival] } */
-async function getFestivalList(url) {
-  const [data, regions] = await Promise.all([getJson(url), fetchRegions()]);
-  const body = data.body ?? data.response?.body;
-  const items = body?.items?.item ?? [];
-  return { total: body?.totalCount ?? items.length, items: items.map((raw) => toFestival(raw, regions)) };
-}
-
-/** TourAPI 원본 한 건 → Festival (값이 없으면 null) */
-function toFestival(raw, regions) {
-  const sido = regions.find((r) => r.code === raw.lDongRegnCd);
-  const sigungu = sido?.sigungu.find((g) => g.code === raw.lDongSignguCd);
-  const num = (v) => (v === "" || v == null || Number.isNaN(Number(v)) ? null : Number(v));
-  const date = (v) => (v ? dashed(String(v)) : null);
-  const addr = [raw.addr1, raw.addr2].filter(Boolean).join(" ");
-  return {
-    id: String(raw.contentid), title: raw.title,
-    startDate: date(raw.eventstartdate), endDate: date(raw.eventenddate),
-    sidoCode: raw.lDongRegnCd || null, sido: sido?.name ?? null,
-    sigunguCode: raw.lDongSignguCd || null, sigungu: sigungu?.name ?? null,
-    category: raw.lclsSystm3 || null, image: raw.firstimage || raw.firstimage2 || null,
-    lat: num(raw.mapy), lng: num(raw.mapx),
-    ...(addr && { address: addr }), ...(raw.tel && { tel: raw.tel }),
-  };
+  return { address: null, tel: null, sponsor: null, fee: null, homepage: null, overview: null, ...items[0] };
 }
 
 // 같은 조건은 화면을 옮겨도 다시 부르지 않음 (TourAPI 하루 호출 수 아끼기, 새로고침하면 비움)
@@ -139,9 +108,8 @@ function cachedGet(path, params) {
   const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== "" && v != null)).toString();
   const key = `${path}?${qs}`;
   if (!cache.has(key)) {
-    const isFestival = path === "/api/festivals";
-    const mock = isFestival ? USE_MOCK : PLACES_MOCK;
-    const req = (mock ? mockGet(path, params) : (isFestival ? getFestivalList : getJson)(key)).catch((err) => {
+    const mock = path === "/api/festivals" ? USE_MOCK : PLACES_MOCK;
+    const req = (mock ? mockGet(path, params) : getJson(key)).catch((err) => {
       cache.delete(key);
       throw err;
     });
@@ -188,14 +156,10 @@ async function mockGet(path, q) {
   await delay(200);
   let items;
   if (path === "/api/festivals") {
-    const start = q.searchstartdate && dashed(q.searchstartdate);
-    const end = q.searchenddate && dashed(q.searchenddate);
     items = (await loadMockList()).filter((f) =>
-      (!start || f.endDate >= start) && (!end || f.startDate <= end)
-      && (!q.lDongRegnCd || f.sidoCode === q.lDongRegnCd) && (!q.lDongSignguCd || f.sigunguCode === q.lDongSignguCd)
-      && (!q.lclsSystm3 || f.category === q.lclsSystm3));
-    const from = (q.pageNo - 1) * q.numOfRows;
-    return { total: items.length, items: items.slice(from, from + q.numOfRows) };
+      (!q.startDate || f.endDate >= q.startDate) && (!q.endDate || f.startDate <= q.endDate)
+      && (!q.sido || f.sidoCode === q.sido) && (!q.sigungu || f.sigunguCode === q.sigungu)
+      && (!q.category || f.category === q.category));
   } else {
     const typeId = { attraction: 12, food: 39 };
     items = (await loadMockPlaces())
@@ -222,6 +186,4 @@ function lastDay(month) {
   const [y, m] = month.split("-").map(Number);
   return `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
 }
-const compact = (ymd) => (ymd ? ymd.replaceAll("-", "") : "");
-const dashed = (d) => `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
 function delay(ms) { return new Promise((r) => setTimeout(r, ms)); }
