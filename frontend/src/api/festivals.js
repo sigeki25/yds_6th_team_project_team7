@@ -1,8 +1,7 @@
 // 백엔드 API 호출. 백엔드가 준비되기 전에는 USE_MOCK = true 로 mock 데이터를 씀.
 //
 // ── 백엔드와 맞춘 형식 ──────────────────────────────────────────────
-// 축제는 chroma 브랜치 main.py 에 엔드포인트가 있음 (/api 없이 GET /festivals · /festivals/{id}).
-// 화면 주소 /festivals 와 겹쳐서 화면은 /api/festivals 로 부르고, 개발 서버(vite.config.js)가 /api 를 떼서 넘김
+// 축제는 chroma.py search_data(). 화면 주소 /festivals 와 겹치지 않게 백엔드도 /api/festivals 로 받아야 함
 //
 // GET /api/festivals?searchstartdate=YYYYMMDD&searchenddate=YYYYMMDD&lDongRegnCd=44&lDongSignguCd=210
 //                   &lclsSystm3=EV010400&pageNo=1&numOfRows=1000
