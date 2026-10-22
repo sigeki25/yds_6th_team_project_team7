@@ -5,8 +5,10 @@ from chromadb.api.models import Collection
 from haversine import haversine
 from pydantic import BaseModel
 
+from tour_api import _region_names
+
 client = chromadb.PersistentClient(path="chroma_db")
-collection = client.get_or_create_collection(name="searchFestival")
+collection_festival = client.get_or_create_collection(name="searchFestival")
 
 
 # /festivals 입력 변수들
@@ -84,7 +86,7 @@ def insert_data():
         items = data["response"]["body"]["items"]["item"]
         # print(item)
         for item in items:
-            collection.add(
+            collection_festival.add(
                 documents=[item["title"]],
                 metadatas=[{
                     "addr1": item["addr1"],
@@ -126,7 +128,7 @@ def search_data(
         arrange: str | None = None, reverse: bool | None = None,
 ):
     if contentid is not None:
-        return to_response(to_json(collection.get(
+        return to_response(to_json_festival(collection_festival.get(
             ids=[contentid],
             include=[
                 "documents",
@@ -156,7 +158,7 @@ def search_data(
         where = wherelist[0]
     elif len(wherelist) > 1:
         where = {"$and": wherelist}
-    jsonData = to_json(collection.get(
+    jsonData = to_json_festival(collection_festival.get(
         where=where,
         include=[
             "documents",
@@ -194,7 +196,7 @@ def search_data(
     return to_response(jsonData, pageNo, numOfRows)
 
 
-def to_json(collection: Collection):
+def to_json_festival(collection: Collection):
     list = []
     for ids, documents, metadatas in zip(collection["ids"], collection["documents"], collection["metadatas"]):
         data = {}
@@ -208,8 +210,7 @@ def to_json(collection: Collection):
         list.append(data)
     return list
 
-
-def to_response(datalist: list, pageNo: int = 1, numOfRows: int = 10):
+def to_response_original(datalist: list, pageNo: int = 1, numOfRows: int = 10):
     data = datalist[(pageNo - 1) * numOfRows: pageNo * numOfRows]
     return {
         "header": {
@@ -224,6 +225,35 @@ def to_response(datalist: list, pageNo: int = 1, numOfRows: int = 10):
             "pageNo": pageNo,
             "totalCount": len(datalist)
         }
+    }
+
+def to_response(datalist: list, pageNo: int = 1, numOfRows: int = 10):
+    datas = datalist[(pageNo - 1) * numOfRows: pageNo * numOfRows]
+    new_datas = []
+    for data in datas:
+        new_data = {}
+        new_data["id"] = data.get("contentid", "")
+        new_data["title"] = data.get("title", "")
+        new_data["startDate"] = data.get("eventstartdate", "")
+        if len(new_data["startDate"]) == 8:
+            new_data["startDate"] = f"{new_data['startDate'][:4]}-{new_data['startDate'][4:6]}-{new_data['startDate'][6:8]}"
+        new_data["endDate"] = data.get("eventenddate", "")
+        if len(new_data["endDate"]) == 8:
+            new_data["endDate"] = f"{new_data['endDate'][:4]}-{new_data['endDate'][4:6]}-{new_data['endDate'][6:8]}"
+        new_data["sidoCode"] = data.get("lDongRegnCd", "")
+        new_data["sigunguCode"] = data.get("lDongSignguCd", "")
+        if "addr1" in data:
+            new_data["sido"], new_data["sigungu"] = _region_names(new_data["sidoCode"], new_data["sigunguCode"], data.get("addr1"))
+        new_data["category"] = data.get("lclsSystm3", "")
+        new_data["image"] = data.get("firstimage", "")
+        new_data["lat"] = float(data.get("mapy", "0"))
+        new_data["lng"] = float(data.get("mapx", "0"))
+        new_datas.append(new_data)
+    return {
+        "total": len(datalist),
+        "page": pageNo,
+        "size": len(new_datas),
+        "items":  new_datas
     }
 
 # search_data(lDongRegnCd="11", arrange="eventstartdate")  # 테스트
