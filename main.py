@@ -22,12 +22,12 @@ def main():
     # return RedirectResponse("/view/index.html")
 
 
-@app.get("/festivals")
+@app.get("/api/festivals")
 def festivals(params: FilterSearchData = Depends()):
     result = search_data(**params.model_dump())
     return result
 
-@app.get("/festivals/{id}")
+@app.get("/api/festivals/{id}")
 def festivals(id: str):
     result = search_data(contentid=id)
     return result
