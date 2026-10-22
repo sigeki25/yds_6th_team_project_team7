@@ -8,7 +8,7 @@
 //          festival_id: "123" | null,             // 추가 제안: D110 에서 첨부한 축제
 //          previous_course: Course | null }       // 추가 제안: R110 코스 수정(1회)일 때 이전 코스
 //   응답 200 { answer, quick_replies: ["반나절","하루"], conditions,   // handle_chat 반환값 그대로
-//              course?: Course, fallback?: true }                     // 추가 제안: 코스가 완성됐을 때
+//              course?: Course, fallback?: true }                     // 조건이 다 모이면 handle_chat 이 course 를 붙임 (fallback 은 추가 제안)
 //     - conditions 가 null → AI 오류 안내 (CM10-8)
 //     - conditions.off_topic → 서비스와 무관한 질문 (CM10-10)
 //     - course 가 있으면 코스 완성 (CM10-7). fallback: AI 실패로 가까운 순 기본 코스
@@ -23,6 +23,10 @@
 //            changed?: [placeId], changeNote?: "..." }           // 수정 응답일 때 바뀐 장소 · 한 줄 설명
 //   - 반나절 240분 · 하루 480분 (체류 포함) 안의 코스만
 //   - hours 는 TourAPI 원본 값만, 없으면 null
+//     detailIntro2 는 contentId 하나씩만 받아서 코스에 넣은 places 만 부름 (nearby · 후보는 안 부름 → 코스 장소 수만큼만)
+//     음식점(39) opentimefood, 관광지(12) usetime. 축제는 목록에 기간이 있어 안 부름. 호출 실패면 null
+//   - legs 는 kakao_api.get_route() 의 legs 를 바꿔 씀: minutes = round(duration / 60), km = distance / 1000 (소수 1자리)
+//     길찾기 실패 구간만 직선거리로 어림하고 estimated: true
 // ────────────────────────────────────────────────────────────────
 
 import { distanceKm, festivalStatus, REGION_BY_SIDO, today } from "../lib/festival.js";

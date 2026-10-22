@@ -27,7 +27,11 @@ export default defineConfig(({ command }) => {
     server: {
       port: 5173,
       // 백엔드 API 는 FastAPI(8000) 로 넘김
-      proxy: { "/api": "http://localhost:8000" },
+      proxy: {
+        // chroma 백엔드는 /api 없이 /festivals 로 받아서 /api 를 떼고 넘김 (백엔드에 /api 가 붙으면 지울 것)
+        "/api/festivals": { target: "http://localhost:8000", rewrite: (path) => path.replace(/^\/api/, "") },
+        "/api": "http://localhost:8000",
+      },
     },
   };
 });
