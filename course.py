@@ -2,11 +2,12 @@
 import logging
 import math
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 
 from chroma import search_data
 from kakao_api import get_route, search_place
-from tour_api import CONTENT_TYPES, location_based_list, search_keyword
+from tour_api import CONTENT_TYPES, _call, _clean, location_based_list, search_keyword
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,8 @@ DURATION_NAMES = {'half': '반나절', 'day': '하루'}
 NEARBY_KM = 8    # 코스에 안 들어간 주변 장소(지도 회색 점)를 출발점에서 몇 km 까지 보여 줄지
 NEARBY_MAX = 30
 FESTIVAL_SEARCH_ROWS = 300  # 축제 DB 가 300개 정도라 반경 안의 축제를 한 번에 다 받음
+# detailIntro2 에서 운영시간이 들어 있는 항목 (프론트 chat.js 설명과 같음)
+HOURS_FIELDS = {'attraction': 'usetime', 'food': 'opentimefood'}
 
 def visit_date_of(conditions:dict) -> tuple[str, bool]:
     """방문 날짜와, 날짜를 말하지 않아서 오늘로 정했는지 여부
@@ -217,6 +220,19 @@ def pick_places(places:list[dict], duration:str, start:dict | None = None,
         chosen.append(nxt)
     return chosen
 
+def place_hours(place:dict) -> str | None:
+    """코스 장소 하나의 운영시간 (TourAPI 원본 글, 태그만 지움). 축제이거나 없거나 실패하면 None"""
+    field = HOURS_FIELDS.get(place['type'])
+    if field is None:  # 축제는 목록에 기간이 있어서 안 부름
+        return None
+    try:
+        items = _call('detailIntro2', {'contentId': place['id'],
+                                       'contentTypeId': PLACE_TYPES[place['type']]})['items']
+    except Exception:  # 운영시간을 못 받아도 코스는 그대로 보여 줌
+        logger.exception('운영시간 가져오기 실패: %s', place['title'])
+        return None
+    return _clean(items[0].get(field)) if items else None
+
 def route_legs(chosen:list[dict]) -> list[dict] | None:
     """장소 사이 자동차 이동 (카카오 길찾기, 코스 전체를 한 번에). 실패하면 None
 
@@ -294,6 +310,9 @@ def build_course(conditions:dict) -> tuple[dict | None, str | None]:
         return None, 'no_places'
     legs = route_legs(chosen) or estimated_legs(chosen)                 # ⑤ 실패하면 ⑥
     chosen, legs = fit_time_limit(chosen, legs, duration)               # ⑤
+    # 운영시간은 장소마다 따로 불러야 해서 동시에 부름 (하나가 느려도 전체가 30초 이상 걸리지 않게)
+    with ThreadPoolExecutor() as pool:
+        hours = list(pool.map(place_hours, chosen))
 
     chosen_ids = {p['id'] for p in chosen}
     nearby = [{'id': p['id'], 'type': p['type'], 'title': p['title'], 'lat': p['lat'], 'lng': p['lng']}
@@ -311,7 +330,7 @@ def build_course(conditions:dict) -> tuple[dict | None, str | None]:
         'estimated': any(leg['estimated'] for leg in legs),
         'places': [{'id': p['id'], 'type': p['type'], 'title': p['title'], 'address': p['address'],
                     'image': p['image'], 'lat': p['lat'], 'lng': p['lng'],
-                    'stayMin': STAY_MIN[p['type']], 'hours': None,  # 영업시간은 1차에서 안 넣음
+                    'stayMin': STAY_MIN[p['type']], 'hours': hours[i],
                     'reason': place_reason(i, chosen, legs, base_date_default),
                     # 축제는 상세 화면(D110)으로 갈 수 있게 축제 id 를 붙임
                     **({'festivalId': p['id']} if p['type'] == 'festival' else {})}
