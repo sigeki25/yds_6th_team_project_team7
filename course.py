@@ -4,6 +4,7 @@ import math
 import re
 from datetime import date
 
+from chroma import search_data
 from kakao_api import get_route, search_place
 from tour_api import CONTENT_TYPES, location_based_list, search_keyword
 
@@ -23,7 +24,7 @@ EXCLUDED_CATEGORIES = {
     'HS030400',  # 종교성지 > 기타 (성당 등)
 }
 
-STAY_MIN = {'attraction': 60, 'food': 60}   # 장소별 머무는 시간(분), 프론트 목업과 같음
+STAY_MIN = {'festival': 90, 'attraction': 60, 'food': 60}   # 장소별 머무는 시간(분), 프론트 목업과 같음
 TIME_LIMIT = {'half': 240, 'day': 480}      # 체류 + 이동 합계 (반나절 4시간, 하루 8시간)
 # 첫 관광지 다음에 이어 붙일 순서
 NEXT_ORDER = {'half': ['food', 'attraction'], 'day': ['attraction', 'food', 'attraction', 'food']}
@@ -48,6 +49,7 @@ CAR_KMH = 35        # 어림할 때 차 속도 (시속, km)
 DURATION_NAMES = {'half': '반나절', 'day': '하루'}
 NEARBY_KM = 8    # 코스에 안 들어간 주변 장소(지도 회색 점)를 출발점에서 몇 km 까지 보여 줄지
 NEARBY_MAX = 30
+FESTIVAL_SEARCH_ROWS = 300  # 축제 DB 가 300개 정도라 반경 안의 축제를 한 번에 다 받음
 
 def visit_date_of(conditions:dict) -> tuple[str, bool]:
     """방문 날짜와, 날짜를 말하지 않아서 오늘로 정했는지 여부
@@ -114,6 +116,27 @@ def start_place(center:dict) -> dict | None:
                 and same_name(p['title'], center['name']) and distance_km(center, p) < START_MAX_KM):
             return {**p, 'type': 'attraction'}
     return None
+
+def festivals_near(center:dict, visit_date:str) -> list[dict]:
+    """방문일에 열리는 근처 축제 (가까운 순). 없거나 실패하면 []
+
+    축제는 하루 한 번 받아 둔 chroma DB 에서 찾음 (TourAPI 호출 없음)
+    """
+    day = visit_date.replace('-', '')  # chroma 는 날짜가 'YYYYMMDD'
+    try:
+        # 날짜 조건은 chroma 에서 에러가 나서(문자열 비교) 거리로만 찾고 날짜는 아래에서 거름
+        result = search_data(numOfRows=FESTIVAL_SEARCH_ROWS, mapx=str(center['lng']),
+                             mapy=str(center['lat']), radius=str(SEARCH_RADIUS))
+    except Exception:  # DB 가 없거나 오류여도 축제만 빼고 코스는 만듦
+        logger.exception('축제 찾기 실패')
+        return []
+    items = [i for i in result['body']['items']['item'] if i['eventstartdate'] <= day <= i['eventenddate']]
+    items.sort(key=lambda i: float(i['dist']))  # search_data 의 dist 정렬은 글자 순이라 직접 숫자로 정렬
+    return [{'id': i['contentid'], 'type': 'festival', 'title': i['title'],
+             'address': ' '.join(filter(None, (i['addr1'], i['addr2']))) or None,
+             'image': i['firstimage'] or i['firstimage2'] or None,
+             'lat': float(i['mapy']), 'lng': float(i['mapx']), 'category': i['lclsSystm3']}
+            for i in items]
 
 def distance_km(a:dict, b:dict) -> float:
     """두 장소의 직선거리 (km)"""
@@ -240,8 +263,10 @@ def course_title(conditions:dict) -> str:
     who = with_josa(conditions['companion']) + ' ' if conditions['companion'] else ''
     return f"{who}{conditions['region']} {DURATION_NAMES[conditions['duration']]}"
 
-def place_reason(i:int, chosen:list[dict], legs:list[dict]) -> str:
-    """장소마다 붙는 한 줄 설명"""
+def place_reason(i:int, chosen:list[dict], legs:list[dict], base_date_default:bool) -> str:
+    """장소마다 붙는 한 줄 설명 (축제 문구는 프론트 목업과 같음)"""
+    if chosen[i]['type'] == 'festival':
+        return '지금 열리고 있는 축제예요' if base_date_default else '방문일에 열리는 축제예요'
     if i == 0:
         return '코스를 시작하는 곳이에요'
     return f"{chosen[i - 1]['title']}에서 차로 {legs[i - 1]['minutes']}분"
@@ -261,7 +286,10 @@ def build_course(conditions:dict) -> tuple[dict | None, str | None]:
         return None, 'api'
     duration = conditions['duration']
     preferred = preference_categories(conditions['preference'])
-    chosen = pick_places(places, duration, start_place(center), preferred)   # ④
+    festivals = festivals_near(center, base_date)
+    # 출발점: 방문일에 열리는 가장 가까운 축제 → 대표 관광지(1-a) → 가장 가까운 관광지
+    start = festivals[0] if festivals else start_place(center)
+    chosen = pick_places(places, duration, start, preferred)                  # ④
     if not chosen:
         return None, 'no_places'
     legs = route_legs(chosen) or estimated_legs(chosen)                 # ⑤ 실패하면 ⑥
@@ -269,7 +297,8 @@ def build_course(conditions:dict) -> tuple[dict | None, str | None]:
 
     chosen_ids = {p['id'] for p in chosen}
     nearby = [{'id': p['id'], 'type': p['type'], 'title': p['title'], 'lat': p['lat'], 'lng': p['lng']}
-              for p in places if p['id'] not in chosen_ids and distance_km(chosen[0], p) < NEARBY_KM]
+              for p in festivals + places
+              if p['id'] not in chosen_ids and distance_km(chosen[0], p) < NEARBY_KM]
     return {
         'title': course_title(conditions),
         'duration': duration,
@@ -283,7 +312,10 @@ def build_course(conditions:dict) -> tuple[dict | None, str | None]:
         'places': [{'id': p['id'], 'type': p['type'], 'title': p['title'], 'address': p['address'],
                     'image': p['image'], 'lat': p['lat'], 'lng': p['lng'],
                     'stayMin': STAY_MIN[p['type']], 'hours': None,  # 영업시간은 1차에서 안 넣음
-                    'reason': place_reason(i, chosen, legs)} for i, p in enumerate(chosen)],
+                    'reason': place_reason(i, chosen, legs, base_date_default),
+                    # 축제는 상세 화면(D110)으로 갈 수 있게 축제 id 를 붙임
+                    **({'festivalId': p['id']} if p['type'] == 'festival' else {})}
+                   for i, p in enumerate(chosen)],
         'legs': legs,
         'nearby': nearby[:NEARBY_MAX],
     }, None
