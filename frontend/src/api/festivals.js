@@ -1,4 +1,4 @@
-// 백엔드 API 호출. 백엔드가 준비되기 전에는 USE_MOCK = true 로 mock 데이터를 씀.
+// 백엔드 API 호출. USE_MOCK = true 면 public/mock 스냅샷을 씀 (백엔드 · chroma_db 없이 화면만 볼 때).
 //
 // ── 백엔드와 맞춘 형식 ──────────────────────────────────────────────
 // 축제는 chroma.py search_festival_data(). 요청 · 응답 이름은 tour_api.py 와 같음 (chroma c0f7714)
@@ -24,7 +24,7 @@
 
 import { asset, distanceKm, festivalStatus, REGION_BY_SIDO, STATUS, today } from "../lib/festival.js";
 
-export const USE_MOCK = true;
+export const USE_MOCK = false;
 
 export class NotFoundError extends Error {}
 
