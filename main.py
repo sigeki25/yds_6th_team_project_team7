@@ -9,6 +9,8 @@ from tour_api import search_keyword, location_based_list, area_based_list, searc
 
 from view_routes import router as view_router
 
+from chat_api import router as chat_router
+
 app = FastAPI()
 # app.mount("/view", StaticFiles(directory="view", check_dir=False))  # view 는 frontend 빌드 결과
 app.include_router(view_router)
