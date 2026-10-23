@@ -26,7 +26,7 @@
 .info-list { display: grid; row-gap: 12px; margin: 0; }
 .info-list__row { display: grid; grid-template-columns: 56px minmax(0, 1fr); }
 .info-list dt { color: var(--c-text-sub); font-weight: 600; font-size: 14px; padding-top: 1px; }
-.info-list dd { margin: 0; word-break: break-all; }
+.info-list dd { margin: 0; word-break: break-all; white-space: pre-line; } /* 시간 같은 값은 줄바꿈 그대로 */
 
 /* 5 · 6 · 7 버튼 */
 .detail__actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; margin-top: 24px; }

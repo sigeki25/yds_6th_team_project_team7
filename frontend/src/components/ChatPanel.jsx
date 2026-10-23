@@ -137,7 +137,7 @@ export default function ChatPanel({ region, onCourse }) {
 
 /** CM10-7 완성: 장소별 한 줄 이유 + [코스 자세히 보기] */
 function CourseSummary({ course, current, onOpen }) {
-  const noHours = course.places.some((p) => p.type !== "festival" && !p.hours);
+  const noHours = course.places.some((p) => !p.hours);
   return (
     <div className="chat-course">
       <ol className="chat-course__list">

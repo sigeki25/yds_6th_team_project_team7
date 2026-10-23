@@ -137,11 +137,12 @@ function PlaceCard({ place: p, n, active, changed, onSelect }) {
             : <button type="button" onClick={onSelect}>{p.title}</button>}
         </h3>
         {p.address && <p className="place-card__meta">{p.address}</p>}
-        <p className="place-card__meta">
+        {/* 운영시간 · 휴무는 TourAPI 글 그대로 (줄바꿈 유지), 없으면 안내 */}
+        <p className="place-card__meta place-card__meta--hours">
           체류 약 {p.stayMin}분
-          {/* 축제는 운영시간을 받지 않음 (기간은 축제 상세에 있음) */}
-          {p.type !== "festival" && (p.hours ? ` · ${p.hours}` : <> · <span className="text-warn">운영시간 정보 없음</span></>)}
+          {p.hours ? ` · ${p.hours}` : <> · <span className="text-warn">운영시간 정보 없음</span></>}
         </p>
+        {p.restDate && <p className="place-card__meta place-card__meta--hours">휴무 {p.restDate}</p>}
       </div>
     </article>
   );

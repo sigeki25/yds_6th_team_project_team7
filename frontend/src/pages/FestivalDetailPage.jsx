@@ -102,6 +102,8 @@ function FestivalDetail({ festival: f }) {
 
   const rows = [
     ["기간", formatPeriodFull(f.startDate, f.endDate)],
+    ["시간", f.playtime],   // detailIntro2 playtime, 글 그대로 (줄바꿈 유지)
+    ["장소", f.place],
     ["주소", f.address],
     ["전화", f.tel],
     ["주최", f.sponsor],
