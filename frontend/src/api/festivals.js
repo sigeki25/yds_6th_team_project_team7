@@ -8,8 +8,9 @@
 //   → 200 { "total", "page", "size", "items": [Festival, ...] }   (chroma.to_response, 날짜는 "YYYY-MM-DD")
 //   (lat&lng[&radius=m] 를 주면 items 에 distance(m) 가 붙음. arrange 는 A 제목순 · E 거리순 · startDate · endDate)
 //
-// GET /api/festivals/:id
-//   → search_festival_data(contentid=id). items 가 비면 없는 축제
+// GET /api/festivals/:id                                       (marge 9de756d)
+//   → tour_api.get_festival_detail(id). TourAPI detailCommon2 + detailIntro2 (호출 2번)
+//   → 200 FestivalDetail. 없는 축제면 200 null (404 로 바뀌어도 됨)
 //
 // Festival = { id, title, startDate:"2026-10-16", endDate, sidoCode, sido:"충청남도",
 //              sigunguCode, sigungu:"서산시", category, image, lat, lng }
@@ -74,12 +75,12 @@ export async function fetchFestivals({ month, region, sido, sigungu, cat, active
   return { total: items.length, items: items.slice(from, from + Number(size)) };
 }
 
+/** 축제 상세 (D110). 같은 축제는 다시 부르지 않음 (TourAPI 2번 호출) */
 export async function fetchFestival(id) {
   if (USE_MOCK) return mockFestival(id);
-  const { items } = await getJson(`/api/festivals/${encodeURIComponent(id)}`);
-  if (!items?.length) throw new NotFoundError(id);
-  // 상세 API(detailCommon2 · detailIntro2)를 아직 안 받아서 목록 값만 있음 (나머지는 '정보 없음')
-  return { address: null, tel: null, sponsor: null, fee: null, homepage: null, overview: null, ...items[0] };
+  const detail = await cachedGet(`/api/festivals/${encodeURIComponent(id)}`, {});
+  if (!detail) throw new NotFoundError(id);
+  return detail;
 }
 
 // 같은 조건은 화면을 옮겨도 다시 부르지 않음 (새로고침하면 비움)
