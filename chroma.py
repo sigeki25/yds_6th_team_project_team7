@@ -1,4 +1,3 @@
-import json
 from typing import Dict, Any
 
 import chromadb
@@ -134,44 +133,6 @@ def convert_FilterSearchFestival_to_original(model: FilterSearchFestivalData) ->
 
 """
 
-
-def insert_data():
-    with open('./file/response_searchFestival2_296_261021.json', 'r', encoding='utf-8') as f:
-        data = json.load(f)
-        items = data["response"]["body"]["items"]["item"]
-        # print(item)
-        for item in items:
-            collection_festival.add(
-                documents=[item["title"]],
-                metadatas=[{
-                    "addr1": item["addr1"],
-                    "addr2": item["addr2"],
-                    "zipcode": item["zipcode"],
-                    "contenttypeid": item["contenttypeid"],
-                    "createdtime": int(item["createdtime"]),
-                    "eventstartdate": int(item["eventstartdate"]),
-                    "eventenddate": int(item["eventenddate"]),
-                    "firstimage": item["firstimage"],
-                    "firstimage2": item["firstimage2"],
-                    "cpyrhtDivCd": item["cpyrhtDivCd"],
-                    "mapx": item["mapx"],
-                    "mapy": item["mapy"],
-                    "mlevel": item["mlevel"],
-                    "modifiedtime": int(item["modifiedtime"]),
-                    "tel": item["tel"],
-                    "lDongRegnCd": item["lDongRegnCd"],
-                    "lDongSignguCd": item["lDongSignguCd"],
-                    "lclsSystm1": item["lclsSystm1"],
-                    "lclsSystm2": item["lclsSystm2"],
-                    "lclsSystm3": item["lclsSystm3"],
-                }],
-                ids=[item["contentid"]],
-            )
-            print("one insert")
-        print("insert success")
-
-
-# insert_data()  # 최초 1회 실행(테이블 생성)
 
 def search_festival_data(
         numOfRows: int = 10, pageNo: int = 1,
