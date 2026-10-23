@@ -18,14 +18,15 @@
 //            region, totalKm, moveMin, totalMin, estimated,      // estimated: 추정 구간이 하나라도 있음
 //            (region 은 지역 이름 "강릉". 화면은 이름으로 찾은 권역 코드를 regionCode 로 붙여 씀)
 //            places: [{ id, type:"festival"|"attraction"|"food", title, address, image, lat, lng,
-//                       stayMin, hours: "09:00~18:00" | null, reason, festivalId? }],
+//                       stayMin, hours: "09:00~18:00" | null, restDate: "매주 월요일" | null, reason, festivalId? }],
 //            legs: [{ minutes, km, estimated }],                 // places[i] → places[i+1] 자동차 이동
 //            nearby: [{ id, type, title, lat, lng }],            // 코스에 안 들어간 주변 장소 (회색 점)
 //            changed?: [placeId], changeNote?: "..." }           // 수정 응답일 때 바뀐 장소 · 한 줄 설명
 //   - 반나절 240분 · 하루 480분 (체류 포함) 안의 코스만
-//   - hours 는 TourAPI 원본 값만, 없으면 null
+//   - hours · restDate 는 TourAPI detailIntro2 글 그대로 (<br> 만 줄바꿈으로, 숫자로 바꾸지 않음), 없으면 null
 //     detailIntro2 는 contentId 하나씩만 받아서 코스에 넣은 places 만 부름 (nearby · 후보는 안 부름 → 코스 장소 수만큼만)
-//     음식점(39) opentimefood, 관광지(12) usetime. 축제는 목록에 기간이 있어 안 부름. 호출 실패면 null
+//     hours    = 축제(15) playtime / 관광지(12) usetime / 음식점(39) opentimefood
+//     restDate = 관광지 restdate / 음식점 restdatefood / 축제 null
 //   - legs 는 kakao_api.get_route() 의 legs 를 바꿔 씀: minutes = round(duration / 60), km = distance / 1000 (소수 1자리)
 //     길찾기 실패 구간만 직선거리로 어림하고 estimated: true
 // ────────────────────────────────────────────────────────────────
@@ -231,7 +232,7 @@ function buildCourse(chosen, { title, duration, baseDate, baseDateDefault, regio
   const legs = chosen.slice(1).map((p, i) => leg(chosen[i], p));
   const placesOut = chosen.map((p, i) => ({
     id: p.id, type: p.type, title: p.title, address: p.address ?? null, image: p.image ?? null,
-    lat: p.lat, lng: p.lng, stayMin: STAY[p.type], hours: p.hours ?? null,
+    lat: p.lat, lng: p.lng, stayMin: STAY[p.type], hours: p.hours ?? null, restDate: p.restDate ?? null,
     reason: p.reason && !p.changed ? p.reason : reasonOf(p, i, chosen, legs, baseDate),
     ...(p.type === "festival" ? { festivalId: p.festivalId ?? p.id } : {}),
   }));

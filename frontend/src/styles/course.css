@@ -44,6 +44,7 @@
 }
 .place-card__name a { color: var(--c-festival); text-decoration: underline; text-underline-offset: 3px; }
 .place-card__meta { margin: 0; font-size: 13px; color: var(--c-text-sub); }
+.place-card__meta--hours { white-space: pre-line; } /* 운영시간 · 휴무는 TourAPI 글 그대로 */
 .course-leg {
   position: relative; margin: 0 0 0 24px; padding: 10px 0 10px 22px; font-size: 13px; color: var(--c-text-sub);
   border-left: 2px dashed var(--c-primary);
