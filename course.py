@@ -5,7 +5,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 
-from chroma import search_data
+from chroma import search_festival_data
 from kakao_api import get_route, search_place
 from tour_api import CONTENT_TYPES, _call, _clean, location_based_list, search_keyword
 
@@ -127,19 +127,19 @@ def festivals_near(center:dict, visit_date:str) -> list[dict]:
     """
     day = visit_date.replace('-', '')  # chroma 는 날짜가 'YYYYMMDD'
     try:
-        # 날짜 조건은 chroma 에서 에러가 나서(문자열 비교) 거리로만 찾고 날짜는 아래에서 거름
-        result = search_data(numOfRows=FESTIVAL_SEARCH_ROWS, mapx=str(center['lng']),
-                             mapy=str(center['lat']), radius=str(SEARCH_RADIUS))
+        # 종료일 >= 방문일, 시작일 <= 방문일 → 방문일에 열리는 축제
+        result = search_festival_data(numOfRows=FESTIVAL_SEARCH_ROWS, mapx=str(center['lng']),
+                                      mapy=str(center['lat']), radius=str(SEARCH_RADIUS),
+                                      searchstartdate=day, searchenddate=day, arrange='dist')
     except Exception:  # DB 가 없거나 오류여도 축제만 빼고 코스는 만듦
         logger.exception('축제 찾기 실패')
         return []
-    items = [i for i in result['body']['items']['item'] if i['eventstartdate'] <= day <= i['eventenddate']]
-    items.sort(key=lambda i: float(i['dist']))  # search_data 의 dist 정렬은 글자 순이라 직접 숫자로 정렬
-    return [{'id': i['contentid'], 'type': 'festival', 'title': i['title'],
-             'address': ' '.join(filter(None, (i['addr1'], i['addr2']))) or None,
-             'image': i['firstimage'] or i['firstimage2'] or None,
-             'lat': float(i['mapy']), 'lng': float(i['mapx']), 'category': i['lclsSystm3']}
-            for i in items]
+    # 응답에 상세 주소가 없어서 시도 + 시군구로 씀
+    return [{'id': i['id'], 'type': 'festival', 'title': i['title'],
+             'address': ' '.join(filter(None, (i.get('sido'), i.get('sigungu')))) or None,
+             'image': i['image'] or None,
+             'lat': i['lat'], 'lng': i['lng'], 'category': i['category']}
+            for i in result['items']]
 
 def distance_km(a:dict, b:dict) -> float:
     """두 장소의 직선거리 (km)"""
