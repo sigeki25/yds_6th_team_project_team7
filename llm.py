@@ -77,6 +77,7 @@ def chat_answer(query:str, history:list[dict] | None = None) -> str:
 extract_prompt = ChatPromptTemplate.from_messages([
     ("system", """대화를 읽고 사용자의 여행 조건을 JSON으로만 답한다. 설명은 쓰지 않는다.
 사용자가 말하지 않은 값은 null 로 둔다. 추측하지 않는다.
+"코스 추천해줘", "코스 짜줘" 같은 말은 기간이나 취향이 아니다. 반나절·하루, 보고 싶은 것을 직접 말했을 때만 넣는다.
 단, 사용자가 말한 바람(보고 싶다, 먹고 싶다, ~위주로, ~하게)은 빠짐없이 preference 에 넣는다.
 오늘 날짜는 {today} 이다. 연도를 말하지 않으면 오늘 이후의 가장 가까운 날짜로 쓴다.
 
@@ -94,6 +95,12 @@ extract_prompt = ChatPromptTemplate.from_messages([
 
 사용자: 전주에서 맛집 위주로 반나절
 {{"off_topic": false, "region": "전주", "duration": "half", "companion": null, "preference": "맛집", "date": null}}
+
+사용자: 강릉 여행 코스 추천해줘
+{{"off_topic": false, "region": "강릉", "duration": null, "companion": null, "preference": null, "date": null}}
+
+사용자: 부산 코스 짜줘
+{{"off_topic": false, "region": "부산", "duration": null, "companion": null, "preference": null, "date": null}}
 
 사용자: 걷기 편하고 조용한 곳이면 좋겠어요
 {{"off_topic": false, "region": null, "duration": null, "companion": null, "preference": "걷기 편함, 조용한 곳", "date": null}}
@@ -145,6 +152,12 @@ def extract_conditions(query:str, history:list[dict] | None = None) -> dict | No
         conditions = {key: data.get(key, value) for key, value in EMPTY_CONDITIONS.items()}
         if conditions['duration'] not in ('half', 'day'):
             conditions['duration'] = None
+        # 모델이 글자 대신 리스트 등을 줄 때가 있어 글자 또는 None 으로 맞춤
+        for key in ('region', 'companion', 'preference'):
+            value = conditions[key]
+            if isinstance(value, list):  # ["커피", "바다"] → "커피, 바다"
+                value = ', '.join(str(v) for v in value if v)
+            conditions[key] = value if isinstance(value, str) and value.strip() else None
         conditions['date'] = fix_date(conditions['date'], today)
         return conditions
     return None
