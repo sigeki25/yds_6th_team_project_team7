@@ -32,16 +32,16 @@ def festivals(params: FilterSearchFestivalData = Depends()):
     result = search_festival_data(**convert_FilterSearchFestival_to_original(params))
     return result
 
+# 행사 상세정보조회
 @app.get("/api/festivals/{id}")
 def festivals(id: str):
-    result = search_festival_data(contentid=id)
+    result = get_festival_detail(content_id=id)
     return result
 
-
-@app.get("/api/old/festivals")
-def festivals(params: FilterSearchFestivalOriginalData = Depends()):
-    result = search_festival_data(**params.model_dump())
-    return result
+# @app.get("/api/old/festivals")
+# def festivals(params: FilterSearchFestivalOriginalData = Depends()):
+#     result = search_festival_data(**params.model_dump())
+#     return result
 
 # 지역기반 관광정보조회
 @app.get("/api/areaBasedList")
@@ -72,7 +72,7 @@ def search_festival_(start_date: str, keyword: str, request: Request):
     return result
 
 # 행사정보조회
-@app.get("/api/detailFestival")
-def get_festival_detail_(content_id: str):
-    result = get_festival_detail(content_id)
-    return result
+# @app.get("/api/detailFestival")
+# def get_festival_detail_(content_id: str):
+#     result = get_festival_detail(content_id)
+#     return result
