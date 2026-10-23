@@ -17,7 +17,7 @@ export const CATEGORIES = [
   { code: "EV010600", name: "기타축제" },
 ];
 
-// 시·도 법정동 코드 → 7개 권역 코드 (권역 코드 형식은 백엔드와 협의 전 임시값)
+// 시·도 법정동 코드 → 7개 권역 코드 (regions.js, 화면 전용)
 export const REGION_BY_SIDO = {
   "11": "capital", "28": "capital", "41": "capital",
   "51": "gangwon",
