@@ -17,7 +17,7 @@ export const CATEGORIES = [
   { code: "EV010600", name: "기타축제" },
 ];
 
-// 시·도 법정동 코드 → 7개 권역 코드 (권역 코드 형식은 백엔드와 협의 전 임시값)
+// 시·도 법정동 코드 → 7개 권역 코드 (regions.js, 화면 전용)
 export const REGION_BY_SIDO = {
   "11": "capital", "28": "capital", "41": "capital",
   "51": "gangwon",
@@ -28,7 +28,7 @@ export const REGION_BY_SIDO = {
   "50": "jeju",
 };
 
-const SIDO_SHORT = {
+export const SIDO_SHORT = {
   "서울특별시": "서울", "부산광역시": "부산", "대구광역시": "대구", "인천광역시": "인천",
   "대전광역시": "대전", "울산광역시": "울산", "세종특별자치시": "세종", "경기도": "경기",
   "충청북도": "충북", "충청남도": "충남", "경상북도": "경북", "경상남도": "경남",

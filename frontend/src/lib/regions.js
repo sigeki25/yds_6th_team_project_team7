@@ -1,4 +1,4 @@
-// 7개 권역 (UI 설계서 1장). 코드 형식은 백엔드와 협의 전 임시값
+// 7개 권역 (UI 설계서 1장). 화면에서만 쓰는 코드 — 백엔드는 권역 대신 지역 이름("강릉")을 쓰고, 화면이 코드로 바꿔 씀 (chat.js withRegionCode)
 export const REGIONS = [
   { code: "capital", name: "서울 / 인천 / 경기도", short: "수도권" },
   { code: "gangwon", name: "강원특별자치도", short: "강원" },

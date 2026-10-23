@@ -16,6 +16,7 @@
 //
 // Course = { title, duration:"half"|"day", baseDate:"2026-10-21", baseDateDefault: true,
 //            region, totalKm, moveMin, totalMin, estimated,      // estimated: 추정 구간이 하나라도 있음
+//            (region 은 지역 이름 "강릉". 화면은 이름으로 찾은 권역 코드를 regionCode 로 붙여 씀)
 //            places: [{ id, type:"festival"|"attraction"|"food", title, address, image, lat, lng,
 //                       stayMin, hours: "09:00~18:00" | null, reason, festivalId? }],
 //            legs: [{ minutes, km, estimated }],                 // places[i] → places[i+1] 자동차 이동
@@ -29,7 +30,8 @@
 //     길찾기 실패 구간만 직선거리로 어림하고 estimated: true
 // ────────────────────────────────────────────────────────────────
 
-import { distanceKm, festivalStatus, REGION_BY_SIDO, today } from "../lib/festival.js";
+import { distanceKm, festivalStatus, REGION_BY_SIDO, SIDO_SHORT, today } from "../lib/festival.js";
+import { regionByCode } from "../lib/regions.js";
 import { fetchRegions, loadMockFestivals, loadMockPlaces } from "./festivals.js";
 
 export const USE_MOCK = true;
@@ -50,7 +52,7 @@ export async function postChat({ messages, region, festivalId, previousCourse })
     festival_id: festivalId ?? null,
     previous_course: previousCourse ?? null,
   };
-  if (USE_MOCK) return toReply(await mockChat(body));
+  if (USE_MOCK) return withRegionCode(toReply(await mockChat(body)));
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -58,7 +60,23 @@ export async function postChat({ messages, region, festivalId, previousCourse })
   });
   if (res.status === 429) throw new ChatLimitError();
   if (!res.ok) throw new Error(`${res.status} /api/chat`);
-  return toReply(await res.json());
+  return withRegionCode(toReply(await res.json()));
+}
+
+/** Course.region(지역 이름) → 지도 · 링크에 쓸 권역 코드 (못 찾으면 null) */
+async function withRegionCode(reply) {
+  const { course } = reply;
+  if (!course) return reply;
+  let regionCode = regionByCode(course.region)?.code ?? null; // mock 은 권역 코드를 줌
+  if (!regionCode && course.region) {
+    const sidoList = await fetchRegions().catch(() => []);
+    const name = course.region;
+    // 시·도 이름("광주", "충남") → 시·군·구 이름("강릉") 순서로 찾음
+    const sido = sidoList.find((s) => s.name.includes(name) || SIDO_SHORT[s.name] === name)?.code
+      ?? findCity(name, sidoList)?.sido;
+    regionCode = REGION_BY_SIDO[sido] ?? null;
+  }
+  return { ...reply, course: { ...course, regionCode } };
 }
 
 /** handle_chat 반환값 → 화면에서 쓰는 형태 */

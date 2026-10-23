@@ -1,7 +1,7 @@
 // H110 지도 홈(전국) · H120 권역 선택 (/?region=권역코드)
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import { fetchFestivals, fetchPlaces } from "../api/festivals.js";
+import { fetchFestivals } from "../api/festivals.js";
 import ChatPanel from "../components/ChatPanel.jsx";
 import FestivalCard, { FestivalCardSkeleton } from "../components/FestivalCard.jsx";
 import KoreaMap from "../components/KoreaMap.jsx";
@@ -36,7 +36,7 @@ export default function HomePage() {
 
   // 코스가 나오면 그 코스의 권역 지도로
   function onCourse(made) {
-    if (made.region && made.region !== region?.code) setSearchParams({ region: made.region });
+    if (made.regionCode && made.regionCode !== region?.code) setSearchParams({ region: made.regionCode });
   }
 
   // 6. 이번 달 축제 (개최중 · 예정 4개)
@@ -106,28 +106,25 @@ function NationGuide({ month }) {
   );
 }
 
-/** H120 2 · 3 · 4 · 5. 권역 이름 · 축제 수 + 권역 지도 */
+/** H120 2 · 3 · 4 · 5. 권역 이름 · 축제 수 + 권역 지도
+ *  축제만 받음 (chroma DB). 관광지 · 음식점 점은 코스가 만들어진 뒤 course.nearby 로 그림 → 권역 전체 TourAPI 호출 없음 */
 function RegionPanel({ region, course }) {
   const toast = useToast();
-  const [data, setData] = useState({ status: "loading", festivals: [], places: [] });
+  const [data, setData] = useState({ status: "loading", festivals: [] });
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      fetchFestivals({ region: region.code, active: 1, sort: "date", size: 500 }),
-      fetchPlaces(region.code),
-    ])
-      .then(([f, p]) => {
+    fetchFestivals({ region: region.code, active: 1, sort: "date", size: 500 })
+      .then((f) => {
         if (cancelled) return;
-        // 좌표 없는 장소는 지도에 표시 안 함
-        const festivals = f.items.filter((x) => x.lat != null && x.lng != null);
-        setData({ status: "ready", festivals, places: p.items });
+        // 좌표 없는 축제는 지도에 표시 안 함
+        setData({ status: "ready", festivals: f.items.filter((x) => x.lat != null && x.lng != null) });
       })
       .catch((err) => {
         if (cancelled) return;
         console.error(err);
         toast(LOAD_ERROR);
-        setData({ status: "error", festivals: [], places: [] });
+        setData({ status: "error", festivals: [] });
       });
     return () => { cancelled = true; };
   }, [region.code, toast]);
@@ -139,7 +136,7 @@ function RegionPanel({ region, course }) {
         {data.status === "ready" && <span className="region-panel__count">{data.festivals.length}</span>}
       </h1>
       {data.status === "loading" && <div className="skeleton region-panel__skeleton" aria-busy="true" />}
-      {data.status === "ready" && <RegionMap festivals={data.festivals} places={data.places} course={course} />}
+      {data.status === "ready" && <RegionMap festivals={data.festivals} course={course} />}
       {data.status === "error" && (
         <p className="region-panel__error">축제 정보를 불러오지 못했어요.</p>
       )}

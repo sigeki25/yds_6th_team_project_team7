@@ -53,7 +53,7 @@ function CourseResult({ course }) {
     <main className="course">
       <div className="course__side">
         {/* 1. 뒤로 가기: H120 (대화 · 선택 권역 유지) */}
-        <Link className="course__back" to={`/?region=${course.region}`}>
+        <Link className="course__back" to={course.regionCode ? `/?region=${course.regionCode}` : "/"}>
           <span aria-hidden="true">←</span> AI 코스 도우미
         </Link>
 
@@ -139,7 +139,8 @@ function PlaceCard({ place: p, n, active, changed, onSelect }) {
         {p.address && <p className="place-card__meta">{p.address}</p>}
         <p className="place-card__meta">
           체류 약 {p.stayMin}분
-          {p.hours ? ` · ${p.hours}` : <> · <span className="text-warn">운영시간 정보 없음</span></>}
+          {/* 축제는 운영시간을 받지 않음 (기간은 축제 상세에 있음) */}
+          {p.type !== "festival" && (p.hours ? ` · ${p.hours}` : <> · <span className="text-warn">운영시간 정보 없음</span></>)}
         </p>
       </div>
     </article>

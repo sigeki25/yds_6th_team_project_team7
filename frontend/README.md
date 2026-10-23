@@ -37,10 +37,11 @@ uvicorn main:app --reload
 
 ## 알아 둘 것
 
-- **데이터**: 기본은 `public/mock` 의 TourAPI 스냅샷을 씁니다. 축제는 chroma 브랜치 백엔드(`GET /festivals`)에 맞춰 두어 `src/api/festivals.js` 의 `USE_MOCK` 을 `false` 로 바꾸면 실제 API 를 부릅니다 (개발 서버가 `/api/festivals` → `/festivals` 로 넘김). 관광지 · 음식점(`/api/places`)은 엔드포인트가 없어 계속 mock 입니다. 기대하는 응답 형식은 그 파일 맨 위에 있습니다.
-- **AI 코스 도우미**: `/api/chat` 이 준비되기 전이라 `src/api/chat.js` 가 규칙으로 흉내 냅니다 (AI 호출 없음, 이동 시간은 직선거리 어림). `USE_MOCK` 을 `false` 로 바꾸면 실제 API 를 부릅니다. 요청 · 응답 형식은 그 파일 맨 위에 있습니다.
+- **축제 데이터**: 백엔드 `GET /api/festivals` (chroma DB, 요청 · 응답은 `tour_api.py` 형식) 를 부릅니다. 백엔드를 처음 받았으면 `chroma.py` 의 `insert_data()` 를 한 번 실행해 `chroma_db` 를 만들어야 목록이 나옵니다. 백엔드 없이 화면만 볼 때는 `src/api/festivals.js` 의 `USE_MOCK` 을 `true` 로 바꾸면 `public/mock` 스냅샷을 씁니다. 요청 · 응답 형식은 그 파일 맨 위에 있습니다.
+- **관광지 · 음식점**: 권역 단위로 받지 않습니다 (TourAPI 호출량). 코스가 만들어지면 응답의 `course.nearby` 로 코스 주변 것만 지도에 찍습니다.
+- **AI 코스 도우미**: `/api/chat` 이 marge 에 아직 없어서 `src/api/chat.js` 가 규칙으로 흉내 냅니다 (AI 호출 없음, 이동 시간은 직선거리 어림). `USE_MOCK` 을 `false` 로 바꾸면 실제 API 를 부릅니다. 요청 · 응답 형식은 그 파일 맨 위에 있습니다.
 - **대화 · 코스**: 저장하지 않습니다. 새로고침하면 사라지고, `/course` 를 바로 열면 지도 홈으로 돌아갑니다.
-- **권역 코드**: `capital` · `gangwon` 같은 값은 임시입니다 (`src/lib/regions.js`). 백엔드와 맞추면 바꿉니다.
+- **권역 코드**: `capital` · `gangwon` 같은 값은 화면에서만 씁니다 (`src/lib/regions.js`). 백엔드는 권역 대신 지역 이름("강릉")을 주고, 화면이 권역 코드로 바꿔 씁니다.
 - **전국 지도**: 통계청 2013 시·도 경계([southkorea-maps](https://github.com/southkorea/southkorea-maps))로 만든 SVG 경로입니다 (`src/lib/koreaMap.js`, 자동 생성).
 - **카카오맵**: 저장소 루트 `.env` 의 `KAKAO_JS_KEY` 를 씁니다. 카카오 개발자 콘솔 › 플랫폼 › Web 에 `http://localhost:5173`, `http://localhost:8000` 을 등록해야 지도가 뜹니다.
 

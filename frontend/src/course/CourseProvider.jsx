@@ -67,7 +67,7 @@ export function CourseProvider({ children }) {
     if (busy.current || limited || !course || revisionsLeft < 1 || !text.trim()) return null;
     setRevising(true);
     const userMsg = { id: nextId++, role: "user", text: text.trim() };
-    const res = await request(userMsg, { region: course.region, festivalId: festivalRef.current?.id ?? null, previousCourse: course });
+    const res = await request(userMsg, { region: course.regionCode, festivalId: festivalRef.current?.id ?? null, previousCourse: course });
     setRevising(false);
     if (res?.type !== "course") return null;
     setRevisionsLeft((n) => n - 1);
