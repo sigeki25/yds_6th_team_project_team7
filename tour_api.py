@@ -61,6 +61,17 @@ CONTENT_TYPES = {
 }
 FESTIVAL_TYPE_ID = 15
 
+# detailIntro2 는 관광 타입마다 시간 · 쉬는 날 항목 이름이 다르다 → get_intro() 에서 공통 이름으로 바꿈
+#   관광 타입: (시간 항목, 쉬는 날 항목)   쉬는 날 항목이 없는 타입은 None
+INTRO_FIELDS = {
+    12: ("usetime", "restdate"),                 # 관광지
+    14: ("usetimeculture", "restdateculture"),   # 문화시설
+    15: ("playtime", None),                      # 축제공연행사 (행사 기간은 목록에 있음)
+    28: ("usetimeleports", "restdateleports"),   # 레포츠
+    38: ("opentime", "restdateshopping"),        # 쇼핑
+    39: ("opentimefood", "restdatefood"),        # 음식점
+}
+
 
 class TourApiError(Exception):
     """TourAPI 호출 실패 (키 오류, 트래픽 초과, 서버 오류 등)"""
@@ -265,6 +276,47 @@ def get_festival_detail(content_id: str) -> dict | None:
         "playtime": _clean(i.get("playtime")),
     })
     return detail
+
+
+# ──────────────────────────────────────────────────────────────
+# 3-1. 소개정보 (시간 · 쉬는 날) — 축제 · 관광지 · 음식점 공통
+# ──────────────────────────────────────────────────────────────
+def get_intro(content_id: str, content_type_id: int) -> dict | None:
+    """소개정보조회 (/detailIntro2). 관광 타입이 달라도 같은 이름으로 돌려준다. 없으면 None
+
+    content_id       장소 id (목록 결과의 "id")
+    content_type_id  관광 타입 (목록 결과의 "contentTypeId", 예: 12 관광지, 15 축제, 39 음식점)
+
+    돌려주는 값
+      {
+        "id": "2871594",
+        "contentTypeId": 39,
+        "hours": "11:30~21:00",      시간 (축제 playtime / 관광지 usetime / 음식점 opentimefood)
+        "restDate": "추석 연휴",      쉬는 날 (관광지 restdate / 음식점 restdatefood / 축제는 None)
+        "details": {...}             그 밖의 원본 항목 전부 (이름 그대로, 빈 값은 None)
+      }
+    시간 · 쉬는 날은 "상시 개방", "10:00~21:00 (10.16 금 15:00~21:00)" 처럼 형식이 제각각이라
+    HTML 태그만 지우고 글 그대로 넘긴다 (숫자로 바꾸지 않음).
+    """
+    if not content_id:
+        raise ValueError("content_id 는 꼭 넣어야 합니다.")
+    type_id = _to_int(content_type_id)
+    if type_id is None:
+        raise ValueError("content_type_id 는 숫자여야 합니다 (예: 12 관광지, 15 축제, 39 음식점).")
+
+    items = _call("detailIntro2", {"contentId": str(content_id), "contentTypeId": type_id})["items"]
+    if not items:
+        return None
+    item = items[0]
+
+    hours_key, rest_key = INTRO_FIELDS.get(type_id, (None, None))
+    return {
+        "id": str(content_id),
+        "contentTypeId": type_id,
+        "hours": _clean(item.get(hours_key)) if hours_key else None,
+        "restDate": _clean(item.get(rest_key)) if rest_key else None,
+        "details": {k: _clean(v) for k, v in item.items() if k not in ("contentid", "contenttypeid")},
+    }
 
 
 # ──────────────────────────────────────────────────────────────

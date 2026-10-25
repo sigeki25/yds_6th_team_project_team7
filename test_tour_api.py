@@ -4,7 +4,7 @@
     python test_tour_api.py
 
 함수마다 결과 개수와 첫 번째 항목을 출력한다. 전부 [성공] 이면 OK.
-호출 횟수: 약 7번 (개발 키 하루 제한이 있으니 너무 자주 돌리지 말 것)
+호출 횟수: 약 10번 (개발 키 하루 제한이 있으니 너무 자주 돌리지 말 것)
 """
 import json
 from datetime import date
@@ -32,12 +32,12 @@ def show(name, func):
 today = date.today().strftime("%Y%m%d")
 
 # 1. 지역기반: 경기도(41) 관광지(12)
-show("areaBasedList2 - 경기도 관광지",
-     lambda: tour_api.area_based_list(sido="41", content_type_id=12, size=3))
+attractions = show("areaBasedList2 - 경기도 관광지",
+                   lambda: tour_api.area_based_list(sido="41", content_type_id=12, size=3))
 
 # 2. 위치기반: 서울시청 근처 2km 음식점(39)
-show("locationBasedList2 - 서울시청 2km 음식점",
-     lambda: tour_api.location_based_list(lng=126.9780, lat=37.5665, radius=2000, content_type_id=39, size=3))
+foods = show("locationBasedList2 - 서울시청 2km 음식점",
+             lambda: tour_api.location_based_list(lng=126.9780, lat=37.5665, radius=2000, content_type_id=39, size=3))
 
 # 3. 키워드 검색
 show("searchKeyword2 - '불꽃축제'",
@@ -52,3 +52,15 @@ if festivals and festivals["items"]:
     fid = festivals["items"][0]["id"]
     show(f"detailCommon2 + detailIntro2 - 축제 {fid} 상세",
          lambda: tour_api.get_festival_detail(fid))
+
+# 6. 소개정보(시간 · 쉬는 날): 축제 · 관광지 · 음식점 각각 하나씩
+for label, result in (("축제", festivals), ("관광지", attractions), ("음식점", foods)):
+    if result and result["items"]:
+        first = result["items"][0]
+        # 축제 목록에는 contentTypeId 가 없어서 15 로 지정
+        type_id = first.get("contentTypeId") or tour_api.FESTIVAL_TYPE_ID
+        def intro_summary():
+            intro = tour_api.get_intro(first["id"], type_id)
+            # details 는 길어서 빼고 출력
+            return {k: v for k, v in intro.items() if k != "details"} if intro else None
+        show(f"detailIntro2 - {label} {first['id']} 시간 · 쉬는 날", intro_summary)
