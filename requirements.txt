@@ -1,5 +1,5 @@
 uvicorn
-fastapi
+fastapi>=0.115
 
 # 외부 API 호출 (TourAPI, 카카오)
 requests

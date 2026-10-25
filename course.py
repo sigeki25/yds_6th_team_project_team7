@@ -7,7 +7,7 @@ from datetime import date
 
 from chroma import search_festival_data
 from kakao_api import get_route, search_place
-from tour_api import CONTENT_TYPES, _call, _clean, location_based_list, search_keyword
+from tour_api import CONTENT_TYPES, get_intro, location_based_list, search_keyword
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +51,6 @@ DURATION_NAMES = {'half': '반나절', 'day': '하루'}
 NEARBY_KM = 8    # 코스에 안 들어간 주변 장소(지도 회색 점)를 출발점에서 몇 km 까지 보여 줄지
 NEARBY_MAX = 30
 FESTIVAL_SEARCH_ROWS = 300  # 축제 DB 가 300개 정도라 반경 안의 축제를 한 번에 다 받음
-# detailIntro2 에서 운영시간이 들어 있는 항목 (프론트 chat.js 설명과 같음)
-HOURS_FIELDS = {'attraction': 'usetime', 'food': 'opentimefood'}
 
 def visit_date_of(conditions:dict) -> tuple[str, bool]:
     """방문 날짜와, 날짜를 말하지 않아서 오늘로 정했는지 여부
@@ -61,7 +59,7 @@ def visit_date_of(conditions:dict) -> tuple[str, bool]:
     예: {"date": "2026-11-03"} → ("2026-11-03", False)
         {"date": None}         → ("2026-10-22", True)  (오늘)
     """
-    if conditions['date'] and conditions['date'] != date.today().isoformat():
+    if conditions.get('date'):
         return conditions['date'], False
     return date.today().isoformat(), True
 
@@ -162,14 +160,14 @@ def course_minutes(chosen:list[dict]) -> int:
     return stay + move
 
 def nearest(places:list[dict], current:dict, place_type:str, chosen:list[dict],
-            preferred:tuple[str, ...] = ()) -> dict | None:
+            preferred:tuple[str, ...] = (), replacing_id:str | None = None) -> dict | None:
     """current 에서 가장 가까운 place_type 장소 (이미 고른 곳 제외). 없으면 None
 
     preferred(취향 분류)에 맞는 곳이 거리 안에 있으면 그곳을 먼저 고름
     """
     if preferred:
         liked = [p for p in places if (p['category'] or '').startswith(preferred)]
-        found = nearest(liked, current, place_type, chosen)
+        found = nearest(liked, current, place_type, chosen, replacing_id=replacing_id)
         if found is not None:
             return found
     chosen_ids = {c['id'] for c in chosen}
@@ -178,7 +176,7 @@ def nearest(places:list[dict], current:dict, place_type:str, chosen:list[dict],
         if p['type'] != place_type or p['id'] in chosen_ids:
             continue
         if place_type == 'attraction' and any(
-                distance_km(p, c) < MIN_GAP_KM for c in chosen if c['type'] == 'attraction'):
+                distance_km(p, c) < MIN_GAP_KM for c in chosen if c['type'] == 'attraction' and c['id'] != replacing_id):
             continue
         km = distance_km(current, p)
         if km < best_km:
@@ -220,18 +218,15 @@ def pick_places(places:list[dict], duration:str, start:dict | None = None,
         chosen.append(nxt)
     return chosen
 
-def place_hours(place:dict) -> str | None:
-    """코스 장소 하나의 운영시간 (TourAPI 원본 글, 태그만 지움). 축제이거나 없거나 실패하면 None"""
-    field = HOURS_FIELDS.get(place['type'])
-    if field is None:  # 축제는 목록에 기간이 있어서 안 부름
-        return None
+def place_intro(place:dict) -> dict:
+    """Fetch opening hours and closure text without inventing missing information."""
     try:
-        items = _call('detailIntro2', {'contentId': place['id'],
-                                       'contentTypeId': PLACE_TYPES[place['type']]})['items']
-    except Exception:  # 운영시간을 못 받아도 코스는 그대로 보여 줌
-        logger.exception('운영시간 가져오기 실패: %s', place['title'])
-        return None
-    return _clean(items[0].get(field)) if items else None
+        result = get_intro(place['id'], 15 if place['type'] == 'festival' else PLACE_TYPES[place['type']])
+        return {'hours': (result or {}).get('hours'), 'restDate': (result or {}).get('restDate')}
+    except Exception:
+        logger.exception('운영정보 가져오기 실패: %s', place['title'])
+        return {'hours': None, 'restDate': None}
+
 
 def route_legs(chosen:list[dict]) -> list[dict] | None:
     """장소 사이 자동차 이동 (카카오 길찾기, 코스 전체를 한 번에). 실패하면 None
@@ -294,7 +289,7 @@ def build_course(conditions:dict) -> tuple[dict | None, str | None]:
       'no_region' 지역을 못 찾음 / 'api' 장소 가져오기 실패 / 'no_places' 코스로 묶을 장소가 없음
     """
     base_date, base_date_default = visit_date_of(conditions)            # ①
-    center = region_center(conditions['region'])                        # ②
+    center = conditions.get('festival') or region_center(conditions['region'])                        # ②
     if center is None:
         return None, 'no_region'
     places = nearby_places(center)                                      # ③
@@ -304,23 +299,26 @@ def build_course(conditions:dict) -> tuple[dict | None, str | None]:
     preferred = preference_categories(conditions['preference'])
     festivals = festivals_near(center, base_date)
     # 출발점: 방문일에 열리는 가장 가까운 축제 → 대표 관광지(1-a) → 가장 가까운 관광지
-    start = festivals[0] if festivals else start_place(center)
+    start = conditions.get('festival') or (festivals[0] if festivals else start_place(center))
     chosen = pick_places(places, duration, start, preferred)                  # ④
     if not chosen:
         return None, 'no_places'
-    legs = route_legs(chosen) or estimated_legs(chosen)                 # ⑤ 실패하면 ⑥
-    chosen, legs = fit_time_limit(chosen, legs, duration)               # ⑤
-    # 운영시간은 장소마다 따로 불러야 해서 동시에 부름 (하나가 느려도 전체가 30초 이상 걸리지 않게)
-    with ThreadPoolExecutor() as pool:
-        hours = list(pool.map(place_hours, chosen))
+    return render_course(conditions, chosen, festivals + places), None
 
+
+def render_course(conditions:dict, chosen:list[dict], pool:list[dict]) -> dict:
+    base_date, base_date_default = visit_date_of(conditions)
+    legs = route_legs(chosen) or estimated_legs(chosen)
+    chosen, legs = fit_time_limit(chosen, legs, conditions['duration'])
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        intros = list(executor.map(place_intro, chosen))
     chosen_ids = {p['id'] for p in chosen}
     nearby = [{'id': p['id'], 'type': p['type'], 'title': p['title'], 'lat': p['lat'], 'lng': p['lng']}
-              for p in festivals + places
+              for p in pool
               if p['id'] not in chosen_ids and distance_km(chosen[0], p) < NEARBY_KM]
     return {
         'title': course_title(conditions),
-        'duration': duration,
+        'duration': conditions['duration'],
         'baseDate': base_date,
         'baseDateDefault': base_date_default,
         'region': conditions['region'],
@@ -328,13 +326,62 @@ def build_course(conditions:dict) -> tuple[dict | None, str | None]:
         'moveMin': sum(leg['minutes'] for leg in legs),
         'totalMin': total_minutes(chosen, legs),
         'estimated': any(leg['estimated'] for leg in legs),
-        'places': [{'id': p['id'], 'type': p['type'], 'title': p['title'], 'address': p['address'],
-                    'image': p['image'], 'lat': p['lat'], 'lng': p['lng'],
-                    'stayMin': STAY_MIN[p['type']], 'hours': hours[i],
+        'places': [{'id': p['id'], 'type': p['type'], 'title': p['title'], 'address': p.get('address'),
+                    'image': p.get('image'), 'lat': p['lat'], 'lng': p['lng'],
+                    'stayMin': STAY_MIN[p['type']], **intros[i],
                     'reason': place_reason(i, chosen, legs, base_date_default),
-                    # 축제는 상세 화면(D110)으로 갈 수 있게 축제 id 를 붙임
                     **({'festivalId': p['id']} if p['type'] == 'festival' else {})}
                    for i, p in enumerate(chosen)],
         'legs': legs,
         'nearby': nearby[:NEARBY_MAX],
-    }, None
+    }
+
+
+def revise_course(previous:dict, conditions:dict) -> tuple[dict | None, str]:
+    """Apply an explicit edit, fetching alternatives and recalculating every route and total."""
+    revision = conditions['revision']
+    chosen = [dict(p) for p in previous['places']]
+    target_id = revision.get('target_id')
+    index = next((i for i, p in enumerate(chosen) if p['id'] == target_id), None)
+    action = revision['action']
+    if target_id and index is None:
+        return None, '수정할 장소를 기존 코스에서 찾지 못했어요. 장소 이름을 다시 말씀해 주세요.'
+    if action in ('remove', 'replace') and index is None:
+        index = len(chosen) - 1
+    pool = []
+    removed = None
+    added = None
+    if action == 'remove':
+        if len(chosen) < 2:
+            return None, '코스에는 장소가 하나 이상 필요해요. 대신 바꿀 장소 종류를 말씀해 주세요.'
+        removed = chosen.pop(index)
+    else:
+        center = chosen[index] if action == 'replace' else chosen[-1]
+        pool = nearby_places(center)
+        if pool is None:
+            return None, '주변 장소를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'
+        place_type = revision.get('place_type') or (center['type'] if action == 'replace' else None)
+        if place_type not in PLACE_TYPES:
+            return None, '관광지와 음식점 중 어떤 장소를 추가하거나 바꿀까요?'
+        added = nearest(pool, center, place_type, chosen, preference_categories(conditions.get('preference')),
+                        replacing_id=center['id'] if action == 'replace' else None)
+        if added is None:
+            return None, '요청에 맞는 다른 장소를 찾지 못했어요. 기존 코스를 유지할게요.'
+        if action == 'replace':
+            removed, chosen[index] = chosen[index], added
+        else:
+            if len(chosen) >= 8:
+                return None, '장소가 많아 더 추가하기 어려워요. 바꿀 장소를 말씀해 주세요.'
+            chosen.append(added)
+    course = render_course(conditions, chosen, pool)
+    # Do not silently lose existing stops when an addition/replacement exceeds the time budget.
+    if len(course['places']) != len(chosen):
+        return None, '이렇게 수정하면 여행 시간을 넘어요. 하루로 늘리거나 다른 장소를 빼 주세요.'
+    if added and removed:
+        note = f"{removed['title']} 대신 {added['title']}을(를) 넣었어요."
+    elif added:
+        note = f"{added['title']}을(를) 추가했어요."
+    else:
+        note = f"{removed['title']}을(를) 뺐어요."
+    course.update(changed=[added['id']] if added else [], changeNote=note)
+    return course, note

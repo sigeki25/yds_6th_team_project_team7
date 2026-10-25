@@ -37,9 +37,9 @@ uvicorn main:app --reload
 
 ## 알아 둘 것
 
-- **축제 데이터**: 백엔드 `GET /api/festivals` (chroma DB, 요청 · 응답은 `tour_api.py` 형식) 를 부릅니다. 백엔드를 처음 받았으면 `chroma.py` 의 `insert_data()` 를 한 번 실행해 `chroma_db` 를 만들어야 목록이 나옵니다. 백엔드 없이 화면만 볼 때는 `src/api/festivals.js` 의 `USE_MOCK` 을 `true` 로 바꾸면 `public/mock` 스냅샷을 씁니다. 요청 · 응답 형식은 그 파일 맨 위에 있습니다.
+- **축제 데이터**: 백엔드 `GET /api/festivals` (chroma DB, 요청 · 응답은 `tour_api.py` 형식) 를 부릅니다. 백엔드를 처음 받았으면 루트에서 `python chroma_insert_data.py` 를 실행해 `chroma_db` 를 만들어야 목록이 나옵니다. 백엔드 없이 화면만 볼 때는 `src/api/festivals.js` 의 `USE_MOCK` 을 `true` 로 바꾸면 `public/mock` 스냅샷을 씁니다. 요청 · 응답 형식은 그 파일 맨 위에 있습니다.
 - **관광지 · 음식점**: 권역 단위로 받지 않습니다 (TourAPI 호출량). 코스가 만들어지면 응답의 `course.nearby` 로 코스 주변 것만 지도에 찍습니다.
-- **AI 코스 도우미**: `/api/chat` 이 marge 에 아직 없어서 `src/api/chat.js` 가 규칙으로 흉내 냅니다 (AI 호출 없음, 이동 시간은 직선거리 어림). `USE_MOCK` 을 `false` 로 바꾸면 실제 API 를 부릅니다. 요청 · 응답 형식은 그 파일 맨 위에 있습니다.
+- **AI 코스 도우미**: `src/api/chat.js` 는 실제 `POST /api/chat` 을 호출합니다. 로컬 Ollama 서버와 모델이 필요합니다 (루트 README 참고). 모의 시연은 해당 파일의 `USE_MOCK` 을 명시적으로 켠 경우에만 사용합니다. 요청 · 응답 형식은 그 파일 맨 위에 있습니다.
 - **대화 · 코스**: 저장하지 않습니다. 새로고침하면 사라지고, `/course` 를 바로 열면 지도 홈으로 돌아갑니다.
 - **권역 코드**: `capital` · `gangwon` 같은 값은 화면에서만 씁니다 (`src/lib/regions.js`). 백엔드는 권역 대신 지역 이름("강릉")을 주고, 화면이 권역 코드로 바꿔 씁니다.
 - **전국 지도**: 통계청 2013 시·도 경계([southkorea-maps](https://github.com/southkorea/southkorea-maps))로 만든 SVG 경로입니다 (`src/lib/koreaMap.js`, 자동 생성).

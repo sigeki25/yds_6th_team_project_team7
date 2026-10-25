@@ -9,3 +9,8 @@ node_modules/
 
 
 /chroma_db
+
+# Python local environment and bytecode
+.venv/
+__pycache__/
+*.py[cod]

@@ -1,17 +1,18 @@
 import json
+from pathlib import Path
 
 from chroma import collection_festival
 
 
 def insert_data():
-    with open('./file/response_searchFestival2_296_261021.json', 'r', encoding='utf-8') as f:
+    with open(Path(__file__).resolve().parent / 'file/response_searchFestival2_296_261021.json', 'r', encoding='utf-8') as f:
         data = json.load(f)
         items = data["response"]["body"]["items"]["item"]
         # print(item)
         BATCH_SIZE = 200
         for i in range(0, len(items), BATCH_SIZE):
             batch = items[i:i + BATCH_SIZE]
-            collection_festival.add(
+            collection_festival.upsert(
                 documents=[item["title"] for item in batch],
                 metadatas=[{
                     "addr1": item["addr1"],
@@ -41,4 +42,5 @@ def insert_data():
         print("insert success")
 
 
-insert_data()  # 최초 1회 실행(테이블 생성)
+if __name__ == "__main__":
+    insert_data()

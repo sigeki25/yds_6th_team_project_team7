@@ -74,7 +74,7 @@ export default function HomePage() {
 
         <section className="home__center" aria-label="권역 지도">
           {region
-            ? <RegionPanel key={region.code} region={region} course={course?.region === region.code ? course : null} />
+            ? <RegionPanel key={region.code} region={region} course={course?.regionCode === region.code ? course : null} />
             : <NationGuide month={month} />}
         </section>
 
@@ -98,7 +98,7 @@ export default function HomePage() {
 function NationGuide({ month }) {
   return (
     <div className="nation-guide">
-      <p className="nation-guide__title">왼쪽 지도에서 지역을 고르면<br />그 지역 축제 지도가 여기에 나와요</p>
+      <p className="nation-guide__title">원하는 지역을 고르면<br />그 지역 축제 지도가 여기에 나와요</p>
       {month.status === "ready" && (
         <p className="nation-guide__count">이번 달 전국 축제 <strong>{month.total}</strong>개</p>
       )}

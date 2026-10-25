@@ -1,20 +1,26 @@
 import json
+import os
+import re
 from datetime import date
 
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_ollama import ChatOllama
+from ollama import ResponseError
 
-from course import DURATION_NAMES, build_course
+from course import DURATION_NAMES, build_course, revise_course
+from tour_api import get_festival_detail
 
 def get_llm(temperature:float=0.2, format:str|None=None) -> ChatOllama:
     return ChatOllama(
-        model="gemma4:e4b",
+        model=os.getenv("OLLAMA_MODEL", "gemma4:e4b"),
+        base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         temperature=temperature,
+        num_predict=1024,
+        reasoning=False,
         format=format,          # "json" 이면 모델이 JSON 으로만 답하도록 강제
-        timeout=120.0,
         client_kwargs={
-            "timeout": 120.0,
+            "timeout": float(os.getenv("OLLAMA_TIMEOUT", "90")),
         },
     )
 
@@ -79,6 +85,13 @@ extract_prompt = ChatPromptTemplate.from_messages([
 사용자가 말하지 않은 값은 null 로 둔다. 추측하지 않는다.
 "코스 추천해줘", "코스 짜줘" 같은 말은 기간이나 취향이 아니다. 반나절·하루, 보고 싶은 것을 직접 말했을 때만 넣는다.
 단, 사용자가 말한 바람(보고 싶다, 먹고 싶다, ~위주로, ~하게)은 빠짐없이 preference 에 넣는다.
+기존 코스가 전달되면 사용자의 최신 수정 요청을 revision 에 넣는다.
+기존 코스 수정 중에는 최신 요청에 명시한 조건만 추출하고 이전 대화의 취향·지역·날짜는 다시 추출하지 않는다.
+사용자가 특정 장소를 지정한 수정 요청에서 대상이 기존 코스에 없으면 revision 은 null 로 둔다.
+revision 은 null 또는 {{"action": "remove"|"replace"|"add", "target_id": 기존 장소 ID 또는 null, "place_type": "food"|"attraction" 또는 null}} 이다.
+특정 장소를 지정하지 않은 '짧게/줄여'는 remove, '맛집 추가'는 add 이다. 대상이 불명확하면 revision 은 null 로 둔다.
+기존 코스: {previous_course}
+지역·기간·날짜를 바꾸라는 요청은 해당 조건에 반영하고 revision 은 null 로 둔다.
 오늘 날짜는 {today} 이다. 연도를 말하지 않으면 오늘 이후의 가장 가까운 날짜로 쓴다.
 
 {{"off_topic": 여행과 관련 없는 질문이면 true, 아니면 false,
@@ -113,10 +126,11 @@ extract_prompt = ChatPromptTemplate.from_messages([
 ])
 
 extract_chain = extract_prompt | get_llm(temperature=0, format="json")
+extract_text_chain = extract_prompt | get_llm(temperature=0)
 
 # 모든 값이 비어 있는 기본 조건
 EMPTY_CONDITIONS = {'off_topic': False, 'region': None, 'duration': None,
-                    'companion': None, 'preference': None, 'date': None}
+                    'companion': None, 'preference': None, 'date': None, 'revision': None}
 
 def fix_date(value, today:date) -> str | None:
     """
@@ -132,19 +146,32 @@ def fix_date(value, today:date) -> str | None:
         return None
     return visit.isoformat()
 
-def extract_conditions(query:str, history:list[dict] | None = None) -> dict | None:
+def extract_conditions(query:str, history:list[dict] | None = None, previous_course:dict | None = None) -> dict | None:
     """대화에서 여행 조건을 뽑음. 두 번 다 실패하면 None (부르는 쪽에서 AI_ERROR_MESSAGE 안내)"""
     today = date.today()
     # 사용자 메시지만 넘김 (AI 질문 "반나절과 하루 중…" 의 단어를 사용자 답으로 착각하지 않도록)
     user_history = [h for h in history or [] if h['role'] == 'user']
-    for _ in range(2):  # 실패하거나 형식이 틀리면 한 번 더 시도 (CM10-8)
+    active_chain = extract_chain
+    inputs = {'query': query, 'history': to_messages(user_history), 'today': today.isoformat(),
+              'previous_course': json.dumps(previous_course, ensure_ascii=False)}
+    for _ in range(2):  # malformed output or explicit unsupported JSON mode gets one retry
         try:
-            text = extract_chain.invoke({'query':query,'history':to_messages(user_history),'today':today.isoformat()}).content
-        except Exception:  # 타임아웃, 모델 프로세스 종료 등
+            text = active_chain.invoke(inputs).content
+        except ResponseError as exc:
+            if (exc.status_code == 501 and 'structured output is unavailable' in str(exc).lower()):
+                active_chain = extract_text_chain
             continue
+        except Exception:  # connection failure, timeout, or model termination
+            continue
+        if not isinstance(text, str):
+            continue
+        # Accept a single complete JSON fence, never scrape arbitrary prose or execute model output.
+        fenced = re.fullmatch(r"\s*```(?:json)?\s*\n(.*?)\n```\s*", text, flags=re.DOTALL | re.IGNORECASE)
+        if fenced:
+            text = fenced.group(1)
         try:
             data = json.loads(text)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, TypeError):
             continue
         if not isinstance(data, dict):  # 리스트, 글자, 숫자 등이 오면 형식 오류로 보고 재시도
             continue
@@ -158,6 +185,16 @@ def extract_conditions(query:str, history:list[dict] | None = None) -> dict | No
             if isinstance(value, list):  # ["커피", "바다"] → "커피, 바다"
                 value = ', '.join(str(v) for v in value if v)
             conditions[key] = value if isinstance(value, str) and value.strip() else None
+        conditions['off_topic'] = conditions['off_topic'] is True
+        revision = conditions['revision']
+        if not isinstance(revision, dict) or revision.get('action') not in ('remove', 'replace', 'add'):
+            conditions['revision'] = None
+        else:
+            conditions['revision'] = {
+                'action': revision['action'],
+                'target_id': revision.get('target_id') if isinstance(revision.get('target_id'), str) else None,
+                'place_type': revision.get('place_type') if revision.get('place_type') in ('food', 'attraction') else None,
+            }
         conditions['date'] = fix_date(conditions['date'], today)
         return conditions
     return None
@@ -207,28 +244,89 @@ def course_message(course:dict) -> str:
     date_text = '오늘 기준' if course['baseDateDefault'] else course['baseDate']
     return f"{course['region']} {day} 코스를 골랐어요 (방문일: {date_text}). 지도에 번호로 표시했습니다."
 
-def handle_chat(message:str, history:list[dict] | None = None) -> dict:
-    """챗봇 한 번 주고받기 (/api/chat 에서 부를 함수)
+REGION_LABELS = {
+    'capital': '수도권', 'gangwon': '강원', 'chungcheong': '충청',
+    'gyeongsang': '경상', 'southeast': '대구·울산·부산', 'jeolla': '광주·전라', 'jeju': '제주',
+}
+BROAD_REGIONS = set(REGION_LABELS) | set(REGION_LABELS.values()) | {
+    '전국', '경기도', '경기', '강원도', '강원특별자치도', '충청도', '충남', '충북',
+    '충청남도', '충청북도', '전라도', '전남', '전북', '전라남도', '전라북도',
+    '전북특별자치도', '경상도', '경남', '경북', '경상남도', '경상북도', '제주도', '제주특별자치도',
+}
 
-    돌려주는 값: {"answer": 답변, "quick_replies": 빠른 답 버튼, "conditions": 뽑은 조건 또는 None}
-    """
+
+def handle_chat(message:str, history:list[dict] | None = None, *, region:str | None = None,
+                festival_id:str | None = None, previous_course:dict | None = None) -> dict:
     history = history or []
-    conditions = extract_conditions(message, history)
+    conditions = extract_conditions(message, history, previous_course)
     if conditions is None:
         return {'answer': AI_ERROR_MESSAGE, 'quick_replies': [], 'conditions': None}
-    if conditions['off_topic']:
-        return {'answer': OFF_TOPIC_MESSAGE, 'quick_replies': [], 'conditions': conditions}
 
+    def reply(answer):
+        return {'answer': answer, 'quick_replies': [], 'conditions': conditions}
+
+    if conditions['off_topic']:
+        return reply(OFF_TOPIC_MESSAGE)
+    if previous_course:
+        for key, source in (('region', 'region'), ('duration', 'duration'), ('date', 'baseDate')):
+            conditions[key] = conditions[key] or previous_course[source]
+        region_changed = conditions['region'] != previous_course['region']
+        schedule_changed = (conditions['date'] != previous_course['baseDate'] or
+                            conditions['duration'] != previous_course['duration'])
+        # A change of destination/schedule is a rebuild, never a relabel of the old stops.
+        if region_changed or schedule_changed:
+            conditions['revision'] = None
+        if region_changed:
+            festival_id = None
+        else:
+            revision = conditions.get('revision')
+            removed_id = None
+            if revision and revision['action'] in ('remove', 'replace'):
+                removed_id = revision.get('target_id') or previous_course['places'][-1]['id']
+            retained_festival = next((p for p in previous_course['places']
+                                      if p['type'] == 'festival' and p['id'] != removed_id), None)
+            # The frontend may retain an attachment after its stop was removed.
+            festival_id = retained_festival['id'] if retained_festival else None
+        if (not conditions.get('revision') and not region_changed and not schedule_changed
+                and not conditions['preference']):
+            return reply('어느 장소를 빼거나 바꿀까요? 추가하고 싶은 장소 종류도 말씀해 주세요.')
+
+    festival = None
+    if festival_id:
+        try:
+            festival = get_festival_detail(festival_id)
+        except Exception:
+            return reply(AI_ERROR_MESSAGE)
+        if not festival:
+            return reply('첨부한 축제 정보를 찾지 못했어요. 다른 축제를 선택해 주세요.')
+        if festival.get('lat') is None or festival.get('lng') is None:
+            return reply('첨부한 축제의 위치 정보가 없어 코스를 만들 수 없어요.')
+        start, end = festival.get('startDate'), festival.get('endDate')
+        if not start or not end:
+            return reply('축제 개최 기간을 확인할 수 없어 코스를 만들 수 없어요.')
+        visit = conditions['date'] or date.today().isoformat()
+        if not start <= visit <= end:
+            return reply(f"축제 기간은 {start}부터 {end}까지예요. 기간 안의 방문 날짜를 말씀해 주세요.")
+        conditions['region'] = festival.get('sigungu') or festival.get('sido') or festival['title']
+        conditions['festival'] = {**festival, 'type': 'festival', 'category': None}
+
+    if previous_course and conditions.get('revision'):
+        revised, note = revise_course(previous_course, conditions)
+        if revised is None:
+            return reply(note)
+        return {**reply(note), 'course': revised}
+
+    if not conditions['region']:
+        conditions['region'] = region
+    if not festival and conditions['region'] in BROAD_REGIONS:
+        label = REGION_LABELS.get(conditions['region'], conditions['region'])
+        return reply(f'{label} 중 어느 시·군으로 가고 싶으세요?')
     missing = ask_missing(conditions, history)
     if missing:
         return {**missing, 'conditions': conditions}
-    if not conditions['duration']:  # 한 번 물었는데도 답이 없으면 기본값
+    if not conditions['duration']:
         conditions['duration'] = DEFAULT_DURATION
-
-    # 조건이 다 모였음 → 코스 만들기 (CM10-7)
     course, error = build_course(conditions)
     if course is None:
-        return {'answer': COURSE_FAIL_MESSAGES[error], 'quick_replies': [], 'conditions': conditions}
-    return {'answer': course_message(course), 'quick_replies': [], 'conditions': conditions, 'course': course}
-
-
+        return reply(COURSE_FAIL_MESSAGES.get(error, AI_ERROR_MESSAGE))
+    return {**reply(course_message(course)), 'course': course}

@@ -1,12 +1,12 @@
-// AI 코스 도우미 API. 백엔드가 준비되기 전에는 USE_MOCK 으로 화면에서 흉내 냄 (AI 호출 없음).
+// AI 코스 도우미 API. 기본은 실제 백엔드, USE_MOCK 은 화면 개발용.
 //
 // ── 백엔드와 맞춘 형식 (llm.py handle_chat 인자 · 반환값 그대로) ───────────
 // POST /api/chat
 //   요청 { message: "이번에 보낸 말",
 //          history: [{ role:"user"|"assistant", content }],   // 이전 대화 (저장 안 함)
-//          region: "chungcheong" | null,          // 추가 제안: 지도에서 고른 권역 (있으면 지역을 안 되물어도 됨)
-//          festival_id: "123" | null,             // 추가 제안: D110 에서 첨부한 축제
-//          previous_course: Course | null }       // 추가 제안: R110 코스 수정(1회)일 때 이전 코스
+//          region: "chungcheong" | null,          // 지도에서 고른 권역; 넓은 권역이면 시·군을 되물음
+//          festival_id: "123" | null,             // D110 에서 첨부한 축제
+//          previous_course: Course | null }       // R110 코스 수정(1회)일 때 이전 코스
 //   응답 200 { answer, quick_replies: ["반나절","하루"], conditions,   // handle_chat 반환값 그대로
 //              course?: Course, fallback?: true }                     // 조건이 다 모이면 handle_chat 이 course 를 붙임 (fallback 은 추가 제안)
 //     - conditions 가 null → AI 오류 안내 (CM10-8)
@@ -35,10 +35,12 @@ import { distanceKm, festivalStatus, REGION_BY_SIDO, SIDO_SHORT, today } from ".
 import { regionByCode } from "../lib/regions.js";
 import { fetchRegions, loadMockFestivals, loadMockPlaces } from "./festivals.js";
 
-export const USE_MOCK = true;
+export const USE_MOCK = false;
+const CHAT_TIMEOUT_MS = 300_000;
 export const CHAT_MAX_LENGTH = 200;
 
 export class ChatLimitError extends Error {}
+export class ChatTimeoutError extends Error {}
 
 /**
  * 채팅 한 번 주고받기
@@ -48,27 +50,37 @@ export class ChatLimitError extends Error {}
 export async function postChat({ messages, region, festivalId, previousCourse }) {
   const body = {
     message: messages.at(-1).text,
-    history: messages.slice(0, -1).map(({ role, text }) => ({ role, content: text })),
+    history: messages.slice(0, -1).slice(-40).map(({ role, text }) => ({ role, content: text })),
     region: region ?? null,
     festival_id: festivalId ?? null,
     previous_course: previousCourse ?? null,
   };
   if (USE_MOCK) return withRegionCode(toReply(await mockChat(body)));
-  const res = await fetch("/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (res.status === 429) throw new ChatLimitError();
-  if (!res.ok) throw new Error(`${res.status} /api/chat`);
-  return withRegionCode(toReply(await res.json()));
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    if (res.status === 429) throw new ChatLimitError();
+    if (!res.ok) throw new Error(`${res.status} /api/chat`);
+    return await withRegionCode(toReply(await res.json()));
+  } catch (err) {
+    if (controller.signal.aborted) throw new ChatTimeoutError();
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Course.region(지역 이름) → 지도 · 링크에 쓸 권역 코드 (못 찾으면 null) */
 async function withRegionCode(reply) {
   const { course } = reply;
   if (!course) return reply;
-  let regionCode = regionByCode(course.region)?.code ?? null; // mock 은 권역 코드를 줌
+  let regionCode = regionByCode(course.regionCode)?.code ?? regionByCode(course.region)?.code ?? null; // mock 은 권역 코드를 줌
   if (!regionCode && course.region) {
     const sidoList = await fetchRegions().catch(() => []);
     const name = course.region;
@@ -209,14 +221,16 @@ function reviseCourse(prev, text, places) {
     } else if (extra && list.length > 1) {
       const out = list.pop();
       const swap = nearest(pool, list.at(-1), wantType, [...list, out]);
-      list.push(swap);
-      changed = [swap.id];
-      note = `시간 안에 맞추려고 ${out.title} 대신 ${swap.title}을(를) 넣었어요.`;
+      if (swap && courseMinutes([...list, swap]) <= limit) {
+        list.push(swap);
+        changed = [swap.id];
+        note = `시간 안에 맞추려고 ${out.title} 대신 ${swap.title}을(를) 넣었어요.`;
+      } else list.push(out);
     }
   } else if (list.length > 1) {
     const out = list.pop();
     const swap = nearest(pool, list.at(-1), out.type, [...list, out]);
-    if (swap) {
+    if (swap && courseMinutes([...list, swap]) <= limit) {
       list.push(swap);
       changed = [swap.id];
       note = `${out.title} 대신 가까운 ${swap.title}(으)로 바꿨어요.`;
@@ -263,7 +277,7 @@ function reasonOf(p, i, chosen, legs, baseDate) {
 function leg(a, b) {
   const straight = distanceKm(a, b);
   const km = Math.round(straight * 1.35 * 10) / 10;
-  return { km, minutes: Math.max(3, Math.round((km / 35) * 60)), estimated: straight > 12 };
+  return { km, minutes: Math.max(3, Math.round((km / 35) * 60)), estimated: true };
 }
 
 function courseMinutes(list) {

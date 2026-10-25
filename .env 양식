@@ -8,3 +8,7 @@ KAKAO_JS_KEY=
 
 # TourAPI (한국관광콘텐츠랩) 키
 TOUR_API_KEY=
+# 로컬 Ollama (기본값, 필요할 때 변경)
+OLLAMA_MODEL=gemma4:e4b
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_TIMEOUT=90
